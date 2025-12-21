@@ -1,0 +1,69 @@
+class Agency {
+  final String id;
+  final String name;
+  final String? description;
+  final String? logoUrl;
+  final String? email;
+  final String? phoneNumber;
+  final String? address;
+  final String? state;
+  final String? lga;
+  final bool verified;
+  final bool isActive;
+  final DateTime createdAt;
+  final DateTime? updatedAt;
+
+  Agency({
+    required this.id,
+    required this.name,
+    this.description,
+    this.logoUrl,
+    this.email,
+    this.phoneNumber,
+    this.address,
+    this.state,
+    this.lga,
+    this.verified = false,
+    this.isActive = true,
+    required this.createdAt,
+    this.updatedAt,
+  });
+
+  factory Agency.fromJson(Map<String, dynamic> json) {
+    return Agency(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String?,
+      logoUrl: json['logo_url'] as String?,
+      email: json['email'] as String?,
+      phoneNumber: json['phone_number'] as String?,
+      address: json['address'] as String?,
+      state: json['state'] as String?,
+      lga: json['lga'] as String?,
+      verified: json['verified'] as bool? ?? false,
+      isActive: json['is_active'] as bool? ?? true,
+      createdAt: DateTime.parse(json['created_at'] as String),
+      updatedAt: json['updated_at'] != null 
+          ? DateTime.parse(json['updated_at'] as String) 
+          : null,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'logo_url': logoUrl,
+      'email': email,
+      'phone_number': phoneNumber,
+      'address': address,
+      'state': state,
+      'lga': lga,
+      'verified': verified,
+      'is_active': isActive,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
+    };
+  }
+}

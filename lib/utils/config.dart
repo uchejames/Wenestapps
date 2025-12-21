@@ -1,0 +1,3 @@
+// Supabase Configuration
+const String supabaseUrl = 'https://gcbpxkwwscylyjemdpcd.supabase.co';
+const String supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjYnB4a3d3c2N5bHlqZW1kcGNkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc2NTcyMzksImV4cCI6MjA2MzIzMzIzOX0.l-HRTFc3LjV3ULWRCUjrKgMfsY95voNn22pkwin0iVA';
