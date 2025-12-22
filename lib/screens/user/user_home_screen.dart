@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/screens/user/user_search_screen.dart';
-import 'package:wenest_app/screens/user/user_agencies_screen.dart';
-import 'package:wenest_app/screens/user/user_profile_screen.dart';
-import 'package:wenest_app/screens/user/user_messages_screen.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/screens/user/user_search_screen.dart';
+import 'package:wenest/screens/user/user_agencies_screen.dart';
+import 'package:wenest/screens/user/user_profile_screen.dart';
+import 'package:wenest/screens/user/user_messages_screen.dart';
+import 'package:wenest/utils/constants.dart';
 
 class UserHomeScreen extends StatefulWidget {
   const UserHomeScreen({super.key});
@@ -106,8 +106,8 @@ class HomeContent extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withOpacity(0.6),
-                    Colors.black.withOpacity(0.6),
+                    Colors.black.withValues(alpha: 0.6),
+                    Colors.black.withValues(alpha: 0.6),
                   ],
                 ),
               ),
@@ -336,7 +336,7 @@ class HomeContent extends StatelessWidget {
         Container(
           width: 40,
           height: 40,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             color: AppColors.primaryColor,
             shape: BoxShape.circle,
           ),

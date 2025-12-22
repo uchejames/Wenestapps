@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:wenest_app/utils/constants.dart';
-import 'package:wenest_app/services/supabase_service.dart';
-import 'package:wenest_app/screens/auth/login_screen.dart';
+import 'package:wenest/utils/constants.dart';
+import 'package:wenest/services/supabase_service.dart';
+import 'package:wenest/screens/auth/login_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   const UserProfileScreen({super.key});
@@ -284,7 +284,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           onChanged: (bool newValue) {
             // Handle preference change
           },
-          activeColor: AppColors.primaryColor,
+          activeThumbColor: AppColors.primaryColor,
         ),
       ],
     );

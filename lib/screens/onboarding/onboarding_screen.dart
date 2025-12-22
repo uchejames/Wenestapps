@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
-import 'package:wenest_app/screens/auth/login_screen.dart';
-import 'package:wenest_app/screens/auth/signup_screen.dart';
+import 'package:wenest/utils/constants.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -76,7 +74,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               color: AppColors.primaryColor.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
             ),
-            child: Center(
+            child: const Center(
               child: Icon(
                 Icons.home_work,
                 size: 100,
@@ -137,12 +135,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             child: ElevatedButton(
               onPressed: () {
                 if (_currentPage == _onboardingPages.length - 1) {
-                  // Navigate to login screen
-                  Navigator.pushReplacement(
+                  // Navigate to role selection screen (NEW FLOW)
+                  Navigator.pushReplacementNamed(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
+                    AppRoutes.roleSelection,
                   );
                 } else {
                   _pageController.nextPage(
@@ -173,11 +169,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           TextButton(
             onPressed: () {
               // Navigate to login screen
-              Navigator.pushReplacement(
+              Navigator.pushReplacementNamed(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const LoginScreen(),
-                ),
+                AppRoutes.login,
               );
             },
             child: const Text('Already have an account? Login'),

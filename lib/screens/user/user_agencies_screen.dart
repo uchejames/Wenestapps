@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/utils/constants.dart';
 
 class UserAgenciesScreen extends StatefulWidget {
   const UserAgenciesScreen({super.key});
@@ -280,7 +280,7 @@ class _UserAgenciesScreenState extends State<UserAgenciesScreen> {
                       Container(
                         width: 60,
                         height: 60,
-                        decoration: BoxDecoration(
+                        decoration: const BoxDecoration(
                           color: Colors.white,
                           shape: BoxShape.circle,
                         ),

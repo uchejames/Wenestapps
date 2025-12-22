@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/utils/constants.dart';
 
 class LanguageSelectionScreen extends StatefulWidget {
   const LanguageSelectionScreen({super.key});
@@ -60,7 +60,7 @@ class _LanguageSelectionScreenState extends State<LanguageSelectionScreen> {
                         ),
                       ),
                       trailing: _selectedLanguage == language['code']
-                          ? Icon(
+                          ? const Icon(
                               Icons.check_circle,
                               color: AppColors.primaryColor,
                             )

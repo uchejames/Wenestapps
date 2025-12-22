@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/utils/constants.dart';
 
 class HelpSupportScreen extends StatelessWidget {
   const HelpSupportScreen({super.key});

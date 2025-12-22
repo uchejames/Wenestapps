@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/utils/constants.dart';
 
 class NotificationsSettingsScreen extends StatefulWidget {
   const NotificationsSettingsScreen({super.key});

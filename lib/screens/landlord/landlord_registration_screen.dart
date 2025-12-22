@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/services/supabase_service.dart';
-import 'package:wenest_app/utils/constants.dart';
-import 'package:wenest_app/screens/landlord/landlord_dashboard_screen.dart';
+import 'package:wenest/utils/constants.dart';
 
 class LandlordRegistrationScreen extends StatefulWidget {
   const LandlordRegistrationScreen({super.key});

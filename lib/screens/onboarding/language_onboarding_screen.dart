@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
-import 'package:wenest_app/screens/onboarding/onboarding_screen.dart';
+import 'package:wenest/utils/constants.dart';
+import 'package:wenest/screens/onboarding/onboarding_screen.dart';
 
 class LanguageOnboardingScreen extends StatefulWidget {
   const LanguageOnboardingScreen({super.key});
@@ -65,7 +65,7 @@ class _LanguageOnboardingScreenState extends State<LanguageOnboardingScreen> {
                         ),
                       ),
                       trailing: _selectedLanguage == language
-                          ? Icon(
+                          ? const Icon(
                               Icons.check_circle,
                               color: AppColors.primaryColor,
                             )

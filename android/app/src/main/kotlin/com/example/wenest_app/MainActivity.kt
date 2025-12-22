@@ -1,4 +1,4 @@
-package com.example.wenest_app
+package com.example.wenest
 
 import io.flutter.embedding.android.FlutterActivity
 

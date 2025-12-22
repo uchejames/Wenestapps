@@ -1,5 +1,5 @@
-name: wenest_app
-description: A new Flutter project for WeNest - Nest Where it feels right
+name: wenest
+description: WeNest - Nest Where it feels right. A comprehensive real estate platform connecting users with verified agencies, agents, and landlords.
 
 publish_to: 'none'
 version: 1.0.0+1
@@ -15,25 +15,37 @@ dependencies:
   provider: ^6.0.5
   shared_preferences: ^2.1.1
   intl: ^0.18.1
-  supabase: ^1.9.0
+  supabase_flutter: ^2.10.1
   shimmer: ^3.0.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^2.0.0
+  flutter_launcher_icons: ^0.13.1
+
+# App Icon Configuration
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icons/app_icon.png"
+  adaptive_icon_background: "#0A3F3F"  # WeNest dark teal
+  adaptive_icon_foreground: "assets/icons/app_icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: true
   
+  # Assets
   assets:
     - assets/images/
     - assets/icons/
-    - assets/icons/app_icon.png
   
-  fonts:
-    - family: OpenSans
-      fonts:
-        - asset: assets/fonts/OpenSans-Regular.ttf
-        - asset: assets/fonts/OpenSans-Bold.ttf
-          weight: 700
+  # Fonts - Comment out until you add the font files
+  # fonts:
+  #   - family: OpenSans
+  #     fonts:
+  #       - asset: assets/fonts/OpenSans-Regular.ttf
+  #       - asset: assets/fonts/OpenSans-Bold.ttf
+  #         weight: 700

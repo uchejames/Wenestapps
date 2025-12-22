@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/utils/constants.dart';
 
 // Core Screens
 import 'screens/shared/splash_screen.dart';
@@ -37,9 +37,6 @@ import 'screens/agency/agency_dashboard_screen.dart';
 import 'screens/landlord/landlord_registration_screen.dart';
 import 'screens/landlord/landlord_dashboard_screen.dart';
 
-// Admin Screens
-import 'screens/admin/admin_login_screen.dart';
-import 'screens/admin/admin_dashboard_screen.dart';
 
 // Shared Screens - Notifications
 import 'screens/shared/notifications_screen.dart';
@@ -144,10 +141,6 @@ class MyApp extends StatelessWidget {
         '/landlord_registration': (context) =>
             const LandlordRegistrationScreen(),
         '/landlord_dashboard': (context) => const LandlordDashboardScreen(),
-
-        // ============ ADMIN ROUTES ============
-        '/admin_login': (context) => const AdminLoginScreen(),
-        '/admin_dashboard': (context) => const AdminDashboardScreen(),
 
         // ============ NOTIFICATION ROUTES ============
         '/notifications': (context) => const NotificationsScreen(),

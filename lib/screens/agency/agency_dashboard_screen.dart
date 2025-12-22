@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:shimmer/shimmer.dart';
-import 'package:wenest_app/utils/constants.dart';
-import 'package:wenest_app/services/supabase_service.dart';
-import 'package:wenest_app/screens/auth/login_screen.dart';
+import 'package:wenest/utils/constants.dart';
+import 'package:wenest/services/supabase_service.dart';
 
 class AgencyDashboardScreen extends StatefulWidget {
   const AgencyDashboardScreen({super.key});
@@ -81,15 +79,15 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            DrawerHeader(
-              decoration: const BoxDecoration(
+            const DrawerHeader(
+              decoration: BoxDecoration(
                 color: AppColors.primaryColor,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  const CircleAvatar(
+                  CircleAvatar(
                     radius: 30,
                     backgroundColor: Colors.white,
                     child: Icon(
@@ -98,8 +96,8 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
                       color: AppColors.primaryColor,
                     ),
                   ),
-                  const SizedBox(height: 10),
-                  const Text(
+                  SizedBox(height: 10),
+                  Text(
                     'Premium Estates Ltd',
                     style: TextStyle(
                       color: Colors.white,
@@ -107,8 +105,8 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 5),
-                  const Text(
+                  SizedBox(height: 5),
+                  Text(
                     'Agency Account',
                     style: TextStyle(
                       color: Colors.white70,
@@ -444,7 +442,7 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
                 width: 50,
                 height: 50,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
+                  color: color.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(25),
                 ),
                 child: Icon(

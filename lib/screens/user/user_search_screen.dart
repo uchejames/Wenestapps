@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/utils/constants.dart';
 
 class UserSearchScreen extends StatefulWidget {
   const UserSearchScreen({super.key});
@@ -220,10 +220,10 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
           // Property image
           Expanded(
             child: Container(
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 color: AppColors.backgroundColor,
                 borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(15)),
+                    BorderRadius.vertical(top: Radius.circular(15)),
               ),
               child: Stack(
                 children: [

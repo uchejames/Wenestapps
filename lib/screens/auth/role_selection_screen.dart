@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
+import 'package:wenest/utils/constants.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
   const RoleSelectionScreen({super.key});
@@ -7,65 +7,103 @@ class RoleSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Select Your Role'),
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Welcome to WeNest!',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Please select your role to continue',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 40),
-            _buildRoleCard(
-              context,
-              'Regular User',
-              'Search and browse properties, save favorites, and connect with agencies',
-              Icons.person,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
               AppColors.primaryColor,
-              () {
-                Navigator.pushReplacementNamed(context, AppRoutes.userHome);
-              },
-            ),
-            const SizedBox(height: 20),
-            _buildRoleCard(
-              context,
-              'Real Estate Agent',
-              'List properties, manage listings, and connect with clients',
-              Icons.business,
               AppColors.secondaryColor,
-              () {
-                Navigator.pushReplacementNamed(context, AppRoutes.agencyRegistration);
-              },
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 40),
+                const Text(
+                  'Welcome to WeNest!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Select your role to get started',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.white70,
+                  ),
+                ),
+                const SizedBox(height: 40),
+                
+                // Role Cards
+                Expanded(
+                  child: ListView(
+                    children: [
+                      _buildRoleCard(
+                        context,
+                        'Regular User',
+                        'Search and browse properties, save favorites, and connect with agencies',
+                        Icons.person,
+                        AppColors.primaryColor,
+                        UserType.user,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildRoleCard(
+                        context,
+                        'Real Estate Agent',
+                        'List properties, manage listings, and connect with clients',
+                        Icons.business,
+                        AppColors.secondaryColor,
+                        UserType.agent,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildRoleCard(
+                        context,
+                        'Property Owner/Landlord',
+                        'List your properties for rent or sale directly',
+                        Icons.house,
+                        AppColors.accentColor,
+                        UserType.landlord,
+                      ),
+                    ],
+                  ),
+                ),
+                
+                // Already have account
+                Center(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text(
+                        'Already have an account? ',
+                        style: TextStyle(color: Colors.white70),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pushReplacementNamed(context, AppRoutes.login);
+                        },
+                        child: const Text(
+                          'Login',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            _buildRoleCard(
-              context,
-              'Property Owner/Landlord',
-              'List your properties for rent or sale directly',
-              Icons.house,
-              AppColors.accentColor,
-              () {
-                Navigator.pushReplacementNamed(context, AppRoutes.landlordRegistration);
-              },
-            ),
-          ],
+          ),
         ),
       ),
     );
@@ -77,7 +115,7 @@ class RoleSelectionScreen extends StatelessWidget {
     String description,
     IconData icon,
     Color color,
-    VoidCallback onTap,
+    UserType userType,
   ) {
     return Card(
       elevation: 4,
@@ -85,18 +123,25 @@ class RoleSelectionScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(15),
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: () {
+          // Navigate to signup with selected user type
+          Navigator.pushNamed(
+            context,
+            AppRoutes.signup,
+            arguments: userType,
+          );
+        },
         borderRadius: BorderRadius.circular(15),
         child: Padding(
           padding: const EdgeInsets.all(20.0),
           child: Row(
             children: [
               Container(
-                width: 50,
-                height: 50,
+                width: 60,
+                height: 60,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(10),
+                  color: color.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(15),
                 ),
                 child: Icon(
                   icon,
@@ -121,6 +166,7 @@ class RoleSelectionScreen extends StatelessWidget {
                       description,
                       style: const TextStyle(
                         color: Colors.grey,
+                        fontSize: 14,
                       ),
                     ),
                   ],

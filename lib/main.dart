@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:supabase/supabase.dart';
 import 'app.dart';
-import 'utils/config.dart';
 import 'services/supabase_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Enable edge-to-edge mode for modern look
+  // Enable edge-to-edge mode for modern look
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
-  // ✅ Make system bars transparent
+  // Make system bars transparent
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -21,8 +19,13 @@ void main() async {
     ),
   );
 
-  // Initialize Supabase service
-  SupabaseService();
+  // Initialize Supabase
+  try {
+    await SupabaseService.initialize();
+    print('Supabase initialized successfully');
+  } catch (e) {
+    print('Error initializing Supabase: $e');
+  }
 
   runApp(const MyApp());
 }

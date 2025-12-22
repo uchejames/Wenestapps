@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
-import 'package:wenest_app/screens/auth/login_screen.dart';
+import 'package:wenest/utils/constants.dart';
+import 'package:wenest/screens/auth/login_screen.dart';
 
 class ResetPasswordScreen extends StatefulWidget {
   const ResetPasswordScreen({super.key});

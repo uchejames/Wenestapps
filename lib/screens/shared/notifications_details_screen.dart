@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:wenest_app/utils/constants.dart';
-import 'package:wenest_app/models/notification.dart' as app_notification;
+import 'package:wenest/utils/constants.dart';
+import 'package:wenest/models/notification.dart' as app_notification;
 class NotificationsDetailsScreen extends StatelessWidget {
   const NotificationsDetailsScreen({super.key});
 
@@ -34,7 +34,7 @@ class NotificationsDetailsScreen extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withOpacity(0.1),
+                    color: AppColors.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(15),
                   ),
                   child: const Icon(
