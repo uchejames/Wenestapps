@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:wenest/utils/constants.dart';
+import 'package:flutter/services.dart';
+import '../../utils/constants.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -9,26 +10,41 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final PageController _pageController = PageController();
   int _currentPage = 0;
+  final PageController _pageController = PageController();
 
-  final List<Map<String, String>> _onboardingPages = [
+  final List<Map<String, dynamic>> _onboardingData = [
     {
-      'title': 'Find Your Perfect Nest',
-      'description': 'Discover verified real estate agencies and properties tailored to your needs',
-      'image': 'assets/images/onboarding1.png',
+      "image": AppAssets.onboarding1,
+      "title": "Discover Homes Easily",
+      "subtitle": "Find your dream home with verified listings\ntailored to your needs.",
     },
     {
-      'title': 'Connect with Experts',
-      'description': 'Chat with verified agents and landlords to find your ideal property',
-      'image': 'assets/images/onboarding2.png',
+      "image": AppAssets.onboarding2,
+      "title": "Connect with Agents",
+      "subtitle": "Chat directly with trusted agents, landlords,\nand agencies*",
     },
     {
-      'title': 'Nest Where It Feels Right',
-      'description': 'Make your property dreams a reality with our trusted platform',
-      'image': 'assets/images/onboarding3.png',
+      "image": AppAssets.onboarding3,
+      "title": "Rent, Buy & Sell with\nConfidence",
+      "subtitle": "",
     },
   ];
+
+  void _nextPage() {
+    if (_currentPage < _onboardingData.length - 1) {
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 600),
+        curve: Curves.easeInOutCubic,
+      );
+    } else {
+      Navigator.pushReplacementNamed(context, '/role_selection');
+    }
+  }
+
+  void _skipOnboarding() {
+    Navigator.pushReplacementNamed(context, '/role_selection');
+  }
 
   @override
   void dispose() {
@@ -38,146 +54,164 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          Expanded(
-            child: PageView.builder(
-              controller: _pageController,
-              onPageChanged: (int page) {
-                setState(() {
-                  _currentPage = page;
-                });
-              },
-              itemCount: _onboardingPages.length,
-              itemBuilder: (context, index) {
-                return _buildOnboardingPage(_onboardingPages[index]);
-              },
-            ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          top: true,
+          bottom: true,
+          child: Stack(
+            children: [
+              PageView.builder(
+                controller: _pageController,
+                physics: const ClampingScrollPhysics(),
+                onPageChanged: (index) => setState(() => _currentPage = index),
+                itemCount: _onboardingData.length,
+                itemBuilder: (context, index) => _buildOnboardingPage(_onboardingData[index]),
+              ),
+
+              Positioned(
+                top: 20,
+                right: 20,
+                child: TextButton(
+                  onPressed: _skipOnboarding,
+                  child: Text(
+                    'Skip',
+                    style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ),
+            ],
           ),
-          _buildBottomControls(),
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildOnboardingPage(Map<String, String> pageData) {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Placeholder for onboarding image
-          Container(
-            height: 300,
+  Widget _buildOnboardingPage(Map<String, dynamic> data) {
+    final isLastPage = _currentPage == _onboardingData.length - 1;
+
+    return Stack(
+      children: [
+        Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: BoxDecoration(
+            image: DecorationImage(
+              image: AssetImage(data["image"]),
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+
+        // Deep teal overlay
+        Container(color: AppColors.primaryColor.withOpacity(0.45)),
+
+        // Bottom gradient
+        Align(
+          alignment: Alignment.bottomCenter,
+          child: Container(
+            height: MediaQuery.of(context).size.height * 0.58,
             decoration: BoxDecoration(
-              color: AppColors.primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Center(
-              child: Icon(
-                Icons.home_work,
-                size: 100,
-                color: AppColors.primaryColor,
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Colors.transparent, AppColors.primaryColor.withOpacity(0.98)],
+                stops: const [0.0, 0.65],
               ),
             ),
           ),
-          const SizedBox(height: 40),
-          Text(
-            pageData['title']!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            pageData['description']!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
 
-  Widget _buildBottomControls() {
-    return Padding(
-      padding: const EdgeInsets.all(24.0),
-      child: Column(
-        children: [
-          // Page indicators
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: List.generate(
-              _onboardingPages.length,
-              (index) => Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                width: _currentPage == index ? 12 : 8,
-                height: _currentPage == index ? 12 : 8,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _currentPage == index
-                      ? AppColors.primaryColor
-                      : Colors.grey,
-                ),
+        SafeArea(
+          top: false,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 40, 32, 40),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    data["title"],
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 34,
+                      fontWeight: FontWeight.bold,
+                      height: 1.2,
+                      letterSpacing: -0.5,
+                      shadows: [Shadow(offset: Offset(0, 3), blurRadius: 10, color: Colors.black54)],
+                    ),
+                  ),
+
+                  if (data["subtitle"].isNotEmpty) ...[
+                    const SizedBox(height: 18),
+                    Text(
+                      data["subtitle"],
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70, fontSize: 16.5, height: 1.6),
+                    ),
+                  ],
+
+                  const SizedBox(height: 80),
+
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: List.generate(
+                          _onboardingData.length,
+                          (i) => AnimatedContainer(
+                            duration: const Duration(milliseconds: 350),
+                            margin: const EdgeInsets.only(right: 10),
+                            height: 9,
+                            width: i == _currentPage ? 32 : 9,
+                            decoration: BoxDecoration(
+                              color: i == _currentPage ? AppColors.secondaryColor : Colors.white38,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      GestureDetector(
+                        onTap: _nextPage,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 400),
+                          width: isLastPage ? 180 : 66,
+                          height: 66,
+                          decoration: BoxDecoration(
+                            color: isLastPage ? AppColors.secondaryColor : Colors.white.withOpacity(0.28),
+                            borderRadius: BorderRadius.circular(33),
+                            boxShadow: isLastPage
+                                ? [BoxShadow(color: AppColors.accentColor.withOpacity(0.5), blurRadius: 18, offset: const Offset(0, 8))]
+                                : null,
+                          ),
+                          child: Center(
+                            child: isLastPage
+                                ? const Text(
+                                    'Get Started',
+                                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                                  )
+                                : const Icon(Icons.chevron_right, color: Colors.white, size: 40),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ),
-          const SizedBox(height: 30),
-          // Action buttons
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                if (_currentPage == _onboardingPages.length - 1) {
-                  // Navigate to role selection screen (NEW FLOW)
-                  Navigator.pushReplacementNamed(
-                    context,
-                    AppRoutes.roleSelection,
-                  );
-                } else {
-                  _pageController.nextPage(
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-                padding: const EdgeInsets.symmetric(vertical: 15),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(30),
-                ),
-              ),
-              child: Text(
-                _currentPage == _onboardingPages.length - 1
-                    ? 'Get Started'
-                    : 'Next',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 15),
-          TextButton(
-            onPressed: () {
-              // Navigate to login screen
-              Navigator.pushReplacementNamed(
-                context,
-                AppRoutes.login,
-              );
-            },
-            child: const Text('Already have an account? Login'),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

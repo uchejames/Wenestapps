@@ -28,6 +28,12 @@ import 'screens/user/user_search_screen.dart';
 import 'screens/user/user_agencies_screen.dart';
 import 'screens/user/user_messages_screen.dart';
 import 'screens/user/user_profile_screen.dart';
+import 'screens/user/user_agencies_detail_screen.dart';
+import 'screens/user/property_detail_screen.dart';
+
+// Agent Screens
+import 'screens/agent/agent_registration_screen.dart';
+import 'screens/agent/agent_dashboard_sceen.dart';
 
 // Agency Screens
 import 'screens/agency/agency_registration_screen.dart';
@@ -37,12 +43,10 @@ import 'screens/agency/agency_dashboard_screen.dart';
 import 'screens/landlord/landlord_registration_screen.dart';
 import 'screens/landlord/landlord_dashboard_screen.dart';
 
-
 // Shared Screens - Notifications
 import 'screens/shared/notifications_screen.dart';
 import 'screens/shared/notifications_details_screen.dart';
 import 'screens/shared/notifications_settings_screen.dart';
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -104,6 +108,14 @@ class MyApp extends StatelessWidget {
 
       // ============ ROUTING CONFIGURATION ============
       initialRoute: '/',
+      // Wrap all routes with SafeArea using builder
+      builder: (context, child) {
+        return SafeArea(
+          top: false, // Allow screens to use status bar area if needed
+          bottom: true, // Protect from bottom navigation interference
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
       routes: {
         // ============ CORE APP ROUTES ============
         '/': (context) => const SplashScreen(),
@@ -132,6 +144,12 @@ class MyApp extends StatelessWidget {
         '/user_agencies': (context) => const UserAgenciesScreen(),
         '/user_messages': (context) => const UserMessagesScreen(),
         '/user_profile': (context) => const UserProfileScreen(),
+        '/property_detail': (context) => const PropertyDetailScreen(),
+        '/agency_detail': (context) => const AgencyDetailScreen(),
+
+        // ============ AGENT ROUTES ============
+        '/agent_registration': (context) => const AgentRegistrationScreen(),
+        '/agent_dashboard': (context) => const AgentDashboardScreen(),
 
         // ============ AGENCY ROUTES ============
         '/agency_registration': (context) => const AgencyRegistrationScreen(),

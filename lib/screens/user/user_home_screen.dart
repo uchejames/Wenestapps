@@ -4,6 +4,11 @@ import 'package:wenest/screens/user/user_agencies_screen.dart';
 import 'package:wenest/screens/user/user_profile_screen.dart';
 import 'package:wenest/screens/user/user_messages_screen.dart';
 import 'package:wenest/utils/constants.dart';
+import 'package:wenest/services/supabase_service.dart';
+import 'package:wenest/models/property.dart';
+import 'package:wenest/models/agency.dart';
+import 'package:wenest/models/profile.dart';
+import 'package:shimmer/shimmer.dart';
 
 class UserHomeScreen extends StatefulWidget {
   const UserHomeScreen({super.key});
@@ -15,7 +20,7 @@ class UserHomeScreen extends StatefulWidget {
 class _UserHomeScreenState extends State<UserHomeScreen> {
   int _selectedIndex = 0;
 
-  static const List<Widget> _widgetOptions = <Widget>[
+  final List<Widget> _widgetOptions = const <Widget>[
     HomeContent(),
     UserSearchScreen(),
     UserAgenciesScreen(),
@@ -32,225 +37,474 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(AppStrings.appName),
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {
-              // Handle notifications
-            },
-          ),
-        ],
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: _widgetOptions.elementAt(_selectedIndex),
       ),
-      body: _widgetOptions.elementAt(_selectedIndex),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primaryColor,
-        unselectedItemColor: Colors.grey,
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.search),
-            label: 'Search',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.business),
-            label: 'Agencies',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.message),
-            label: 'Messages',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          backgroundColor: Colors.white,
+          selectedItemColor: AppColors.primaryColor,
+          unselectedItemColor: Colors.grey.shade400,
+          currentIndex: _selectedIndex,
+          onTap: _onItemTapped,
+          elevation: 0,
+          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_rounded, size: 26),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.search_rounded, size: 26),
+              label: 'Search',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.business_rounded, size: 26),
+              label: 'Agencies',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.chat_bubble_rounded, size: 26),
+              label: 'Messages',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_rounded, size: 26),
+              label: 'Profile',
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class HomeContent extends StatelessWidget {
+class HomeContent extends StatefulWidget {
   const HomeContent({super.key});
 
   @override
+  State<HomeContent> createState() => _HomeContentState();
+}
+
+class _HomeContentState extends State<HomeContent> {
+  final _supabaseService = SupabaseService();
+  List<Property> _featuredProperties = [];
+  List<Agency> _featuredAgencies = [];
+  Profile? _profile;
+  bool _isLoadingProperties = true;
+  bool _isLoadingAgencies = true;
+  bool _isLoadingProfile = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllData();
+  }
+
+  Future<void> _loadAllData() async {
+    await Future.wait([
+      _loadProfile(),
+      _loadFeaturedProperties(),
+      _loadFeaturedAgencies(),
+    ]);
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() => _isLoadingProfile = true);
+    try {
+      final user = _supabaseService.getCurrentUser();
+      if (user != null) {
+        final profile = await _supabaseService.getProfile(user.id);
+        setState(() {
+          _profile = profile;
+          _isLoadingProfile = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _isLoadingProfile = false);
+    }
+  }
+
+  Future<void> _loadFeaturedProperties() async {
+    setState(() => _isLoadingProperties = true);
+    try {
+      final properties = await _supabaseService.getProperties(
+        isFeatured: true,
+        limit: 10,
+      );
+      setState(() {
+        _featuredProperties = properties;
+        _isLoadingProperties = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingProperties = false);
+    }
+  }
+
+  Future<void> _loadFeaturedAgencies() async {
+    setState(() => _isLoadingAgencies = true);
+    try {
+      final agencies = await _supabaseService.getAgencies(
+        verified: true,
+        limit: 10,
+      );
+      setState(() {
+        _featuredAgencies = agencies;
+        _isLoadingAgencies = false;
+      });
+    } catch (e) {
+      setState(() => _isLoadingAgencies = false);
+    }
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Hero section
-          Container(
-            height: 200,
-            decoration: const BoxDecoration(
-              color: AppColors.primaryColor,
-              image: DecorationImage(
-                image: AssetImage('assets/images/hero_bg.jpg'),
-                fit: BoxFit.cover,
-              ),
-            ),
+    return RefreshIndicator(
+      onRefresh: _loadAllData,
+      color: AppColors.primaryColor,
+      child: CustomScrollView(
+        slivers: [
+          // Header with Profile
+          SliverToBoxAdapter(
             child: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.6),
-                    Colors.black.withValues(alpha: 0.6),
-                  ],
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text(
-                      'Find Your Perfect Nest',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Trusted real estate agencies at your fingertips',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white70,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () {
-                        // Navigate to search
-                        Navigator.pushNamed(context, '/user_search');
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white,
-                        foregroundColor: AppColors.primaryColor,
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 30,
-                          vertical: 15,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      child: const Text(
-                        'Start Searching',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      // Profile Avatar
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.pushNamed(context, AppRoutes.userProfile);
+                        },
+                        child: Container(
+                          width: 50,
+                          height: 50,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: AppColors.primaryColor.withValues(alpha: 0.2),
+                              width: 2,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primaryColor.withValues(alpha: 0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: _isLoadingProfile
+                              ? ClipOval(
+                                  child: Shimmer.fromColors(
+                                    baseColor: Colors.grey.shade300,
+                                    highlightColor: Colors.grey.shade100,
+                                    child: Container(color: Colors.white),
+                                  ),
+                                )
+                              : CircleAvatar(
+                                  backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
+                                  backgroundImage: _profile?.avatarUrl != null
+                                      ? NetworkImage(_profile!.avatarUrl!)
+                                      : null,
+                                  child: _profile?.avatarUrl == null
+                                      ? Icon(
+                                          Icons.person_rounded,
+                                          color: AppColors.primaryColor,
+                                          size: 26,
+                                        )
+                                      : null,
+                                ),
                         ),
                       ),
+                      const SizedBox(width: 14),
+                      // Greeting
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _getGreeting(),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade600,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            _isLoadingProfile
+                                ? Shimmer.fromColors(
+                                    baseColor: Colors.grey.shade300,
+                                    highlightColor: Colors.grey.shade100,
+                                    child: Container(
+                                      height: 20,
+                                      width: 120,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                    ),
+                                  )
+                                : Text(
+                                    _profile?.fullName ?? 'Welcome!',
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.textColor,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                          ],
+                        ),
+                      ),
+                      // Notification Icon
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryColor.withValues(alpha: 0.05),
+                          shape: BoxShape.circle,
+                        ),
+                        child: IconButton(
+                          icon: const Icon(Icons.notifications_rounded),
+                          color: AppColors.primaryColor,
+                          onPressed: () {
+                            Navigator.pushNamed(context, AppRoutes.notifications);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  // Search Widget
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.pushNamed(context, AppRoutes.userSearch);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: Colors.grey.shade200,
+                          width: 1,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.search_rounded,
+                            color: Colors.grey.shade400,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Search for properties, location...',
+                              style: TextStyle(
+                                color: Colors.grey.shade500,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.tune_rounded,
+                            color: AppColors.primaryColor,
+                            size: 22,
+                          ),
+                        ],
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
-          
-          // Featured agencies section
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Featured Agencies',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
+
+          // Quick Categories
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Browse Categories',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textColor,
                     ),
-                    TextButton(
-                      onPressed: () {
-                        // Navigate to all agencies
-                        Navigator.pushNamed(context, '/user_agencies');
-                      },
-                      child: const Text('View All'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                // Horizontal list of featured agencies
-                SizedBox(
-                  height: 150,
-                  child: ListView(
-                    scrollDirection: Axis.horizontal,
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
                     children: [
-                      _buildAgencyCard(context, 'Premium Agency 1', 4.5),
-                      _buildAgencyCard(context, 'Top Agency 2', 4.8),
-                      _buildAgencyCard(context, 'Verified Agency 3', 4.3),
-                      _buildAgencyCard(context, 'Trusted Agency 4', 4.9),
+                      Expanded(child: _buildCategoryCard('Apartments', Icons.apartment_rounded, 'For Rent')),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildCategoryCard('Houses', Icons.house_rounded, 'For Sale')),
                     ],
                   ),
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // Categories section
-                const Text(
-                  'Browse by Category',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _buildCategoryCard('Land', Icons.landscape_rounded, 'Available')),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildCategoryCard('Commercial', Icons.store_rounded, 'For Lease')),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                GridView.count(
-                  crossAxisCount: 2,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    _buildCategoryCard(context, 'Apartments', Icons.apartment),
-                    _buildCategoryCard(context, 'Houses', Icons.house),
-                    _buildCategoryCard(context, 'Land', Icons.landscape),
-                    _buildCategoryCard(context, 'Commercial', Icons.store),
-                  ],
-                ),
-                
-                const SizedBox(height: 20),
-                
-                // How it works section
-                const Text(
-                  'How WeNest Works',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                ],
+              ),
+            ),
+          ),
+
+          // Featured Properties
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Featured Properties',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textColor,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushNamed(context, AppRoutes.userSearch);
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.primaryColor,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Text('View All', style: TextStyle(fontWeight: FontWeight.w600)),
+                              SizedBox(width: 4),
+                              Icon(Icons.arrow_forward_rounded, size: 16),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 15),
-                Row(
-                  children: [
-                    _buildStepIndicator(1, 'Search'),
-                    const Expanded(child: Divider()),
-                    _buildStepIndicator(2, 'Connect'),
-                    const Expanded(child: Divider()),
-                    _buildStepIndicator(3, 'Nest'),
-                  ],
-                ),
-                const SizedBox(height: 30),
-              ],
+                  const SizedBox(height: 12),
+                  _isLoadingProperties
+                      ? _buildPropertiesShimmer()
+                      : _featuredProperties.isEmpty
+                          ? _buildEmptyState('No featured properties available', Icons.home_work_rounded)
+                          : SizedBox(
+                              height: 280,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                itemCount: _featuredProperties.length,
+                                itemBuilder: (context, index) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      right: index < _featuredProperties.length - 1 ? 16 : 0,
+                                    ),
+                                    child: _buildPropertyCard(_featuredProperties[index]),
+                                  );
+                                },
+                              ),
+                            ),
+                ],
+              ),
+            ),
+          ),
+
+          // Verified Agencies
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 24, bottom: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Verified Agencies',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textColor,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.pushNamed(context, AppRoutes.userAgencies);
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: AppColors.primaryColor,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          child: const Row(
+                            children: [
+                              Text('View All', style: TextStyle(fontWeight: FontWeight.w600)),
+                              SizedBox(width: 4),
+                              Icon(Icons.arrow_forward_rounded, size: 16),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  _isLoadingAgencies
+                      ? _buildAgenciesShimmer()
+                      : _featuredAgencies.isEmpty
+                          ? _buildEmptyState('No verified agencies available', Icons.business_rounded)
+                          : SizedBox(
+                              height: 140,
+                              child: ListView.builder(
+                                scrollDirection: Axis.horizontal,
+                                padding: const EdgeInsets.symmetric(horizontal: 20),
+                                itemCount: _featuredAgencies.length,
+                                itemBuilder: (context, index) {
+                                  return Padding(
+                                    padding: EdgeInsets.only(
+                                      right: index < _featuredAgencies.length - 1 ? 16 : 0,
+                                    ),
+                                    child: _buildAgencyCard(_featuredAgencies[index]),
+                                  );
+                                },
+                              ),
+                            ),
+                ],
+              ),
             ),
           ),
         ],
@@ -258,11 +512,237 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  Widget _buildAgencyCard(BuildContext context, String name, double rating) {
-    return Card(
-      margin: const EdgeInsets.only(right: 10),
-      child: SizedBox(
-        width: 120,
+  Widget _buildCategoryCard(String title, IconData icon, String subtitle) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(context, AppRoutes.userSearch);
+      },
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: AppColors.primaryColor, size: 26),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              subtitle,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPropertyCard(Property property) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(context, '/property_detail', arguments: property.id);
+      },
+      child: Container(
+        width: 240,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image Section
+            Stack(
+              children: [
+                Container(
+                  height: 160,
+                  decoration: BoxDecoration(
+                    color: AppColors.backgroundColor,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      Icons.home_rounded,
+                      color: AppColors.primaryColor.withValues(alpha: 0.2),
+                      size: 50,
+                    ),
+                  ),
+                ),
+                if (property.isFeatured)
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentColor,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        'FEATURED',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.favorite_border_rounded,
+                      color: AppColors.primaryColor,
+                      size: 18,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Details Section
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    property.formattedPrice,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    property.title,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_rounded, size: 14, color: Colors.grey.shade500),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          property.locationDisplay,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      if (property.bedrooms != null && property.bedrooms! > 0) ...[
+                        Icon(Icons.bed_rounded, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('${property.bedrooms}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                        const SizedBox(width: 12),
+                      ],
+                      if (property.bathrooms != null && property.bathrooms! > 0) ...[
+                        Icon(Icons.bathtub_rounded, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('${property.bathrooms}', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                        const SizedBox(width: 12),
+                      ],
+                      if (property.squareMeters != null) ...[
+                        Icon(Icons.square_foot_rounded, size: 16, color: Colors.grey.shade600),
+                        const SizedBox(width: 4),
+                        Text('${property.squareMeters!.toInt()}m²', style: TextStyle(fontSize: 12, color: Colors.grey.shade700)),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAgencyCard(Agency agency) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.pushNamed(context, '/agency_detail', arguments: agency.id);
+      },
+      child: Container(
+        width: 140,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -270,59 +750,77 @@ class HomeContent extends StatelessWidget {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: AppColors.primaryColor,
-                borderRadius: BorderRadius.circular(30),
+                color: AppColors.primaryColor.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(
-                Icons.business,
-                color: Colors.white,
-              ),
+              child: agency.logoUrl != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Image.network(
+                        agency.logoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(Icons.business_rounded, color: AppColors.primaryColor, size: 30);
+                        },
+                      ),
+                    )
+                  : const Icon(Icons.business_rounded, color: AppColors.primaryColor, size: 30),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             Text(
-              name,
+              agency.name,
               textAlign: TextAlign.center,
               style: const TextStyle(
+                fontSize: 13,
                 fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
               ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 5),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(
-                  Icons.star,
-                  size: 16,
-                  color: Colors.amber,
+            if (agency.verified) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                Text(rating.toString()),
-              ],
-            ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified_rounded, size: 12, color: AppColors.primaryColor),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Verified',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),
     );
   }
 
-  Widget _buildCategoryCard(BuildContext context, String title, IconData icon) {
-    return Card(
-      elevation: 2,
-      child: Container(
-        padding: const EdgeInsets.all(16),
+  Widget _buildEmptyState(String message, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.all(32),
+      child: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              icon,
-              size: 40,
-              color: AppColors.primaryColor,
-            ),
-            const SizedBox(height: 10),
+            Icon(icon, size: 60, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
             Text(
-              title,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-              ),
+              message,
+              style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
@@ -330,29 +828,57 @@ class HomeContent extends StatelessWidget {
     );
   }
 
-  Widget _buildStepIndicator(int step, String title) {
-    return Column(
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: const BoxDecoration(
-            color: AppColors.primaryColor,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text(
-              step.toString(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+  Widget _buildPropertiesShimmer() {
+    return SizedBox(
+      height: 280,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: 3,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: EdgeInsets.only(right: index < 2 ? 16 : 0),
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey.shade200,
+              highlightColor: Colors.grey.shade50,
+              child: Container(
+                width: 240,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
               ),
             ),
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(title),
-      ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAgenciesShimmer() {
+    return SizedBox(
+      height: 140,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        itemCount: 4,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: EdgeInsets.only(right: index < 3 ? 16 : 0),
+            child: Shimmer.fromColors(
+              baseColor: Colors.grey.shade200,
+              highlightColor: Colors.grey.shade50,
+              child: Container(
+                width: 140,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

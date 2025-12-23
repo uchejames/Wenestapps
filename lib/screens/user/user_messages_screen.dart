@@ -10,254 +10,273 @@ class UserMessagesScreen extends StatefulWidget {
 }
 
 class _UserMessagesScreenState extends State<UserMessagesScreen> {
+  final _searchController = TextEditingController();
   final List<Map<String, dynamic>> _conversations = [
     {
       'name': 'Premium Estates Ltd',
-      'lastMessage':
-          'Hello! Thanks for your interest in the 3-bedroom apartment...',
+      'lastMessage': 'Hello! Thanks for your interest in the 3-bedroom apartment...',
       'time': '2:30 PM',
       'unread': true,
-      'avatar': Icons.business,
+      'avatar': Icons.business_rounded,
+      'isAgency': true,
     },
     {
       'name': 'John Landlord',
-      'lastMessage':
-          'The property is still available. Would you like to schedule a visit?',
+      'lastMessage': 'The property is still available. Would you like to schedule a visit?',
       'time': '11:45 AM',
       'unread': false,
-      'avatar': Icons.person,
+      'avatar': Icons.person_rounded,
+      'isAgency': false,
     },
     {
       'name': 'Urban Homes Agency',
       'lastMessage': 'We have new properties that match your search criteria.',
       'time': 'Yesterday',
       'unread': true,
-      'avatar': Icons.business,
+      'avatar': Icons.business_rounded,
+      'isAgency': true,
     },
     {
       'name': 'Sarah Agent',
-      'lastMessage':
-          'Thanks for getting back to me. I\'ll send you the documents.',
+      'lastMessage': 'Thanks for getting back to me. I\'ll send you the documents.',
       'time': 'Yesterday',
       'unread': false,
-      'avatar': Icons.person,
+      'avatar': Icons.person_rounded,
+      'isAgency': false,
     },
     {
       'name': 'Metropolitan Properties',
       'lastMessage': 'Special offer: 10% discount on 6-month lease!',
       'time': 'Dec 15',
       'unread': false,
-      'avatar': Icons.business,
+      'avatar': Icons.business_rounded,
+      'isAgency': true,
     },
   ];
 
   bool _isLoading = false;
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
   Future<void> _refreshMessages() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Simulate network request
-    await Future.delayed(const Duration(seconds: 2));
-
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(seconds: 1));
+    setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('Messages'),
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        elevation: 0,
+        title: const Text(
+          'Messages',
+          style: TextStyle(
+            color: AppColors.primaryColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+        centerTitle: false,
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              // Handle search
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_vert),
-            onPressed: () {
-              // Handle more options
-            },
+            icon: const Icon(Icons.more_vert_rounded, color: AppColors.primaryColor),
+            onPressed: () {},
           ),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _refreshMessages,
+        color: AppColors.primaryColor,
         child: Column(
           children: [
-            // Search bar
+            // Search Bar
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
               child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(30),
+                  color: Colors.grey.shade50,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.grey.shade200),
                 ),
-                child: const TextField(
+                child: TextField(
+                  controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Search messages...',
-                    prefixIcon: Icon(Icons.search),
+                    hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                    prefixIcon: Icon(Icons.search_rounded, color: Colors.grey.shade400, size: 22),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.all(15),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                 ),
               ),
             ),
-            // Conversations list
+
+            // Conversations List
             Expanded(
               child: _isLoading
                   ? _buildShimmerList()
                   : ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
                       itemCount: _conversations.length,
                       itemBuilder: (context, index) {
-                        final conversation = _conversations[index];
-                        return _buildConversationTile(conversation);
+                        return Padding(
+                          padding: EdgeInsets.only(
+                            bottom: index < _conversations.length - 1 ? 12 : 0,
+                          ),
+                          child: _buildConversationCard(_conversations[index]),
+                        );
                       },
                     ),
             ),
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          // Create new message
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('New message functionality coming soon'),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
         },
         backgroundColor: AppColors.primaryColor,
-        child: const Icon(Icons.message),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('New Message', style: TextStyle(fontWeight: FontWeight.bold)),
       ),
     );
   }
 
-  Widget _buildConversationTile(Map<String, dynamic> conversation) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: AppColors.primaryColor,
-        child: Icon(
-          conversation['avatar'],
-          color: Colors.white,
+  Widget _buildConversationCard(Map<String, dynamic> conversation) {
+    return GestureDetector(
+      onTap: () {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Chat functionality coming soon'),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: conversation['unread'] 
+              ? AppColors.primaryColor.withValues(alpha: 0.03)
+              : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: conversation['unread']
+                ? AppColors.primaryColor.withValues(alpha: 0.2)
+                : Colors.grey.shade200,
+          ),
+        ),
+        child: Row(
+          children: [
+            // Avatar
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(
+                conversation['avatar'],
+                color: AppColors.primaryColor,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          conversation['name'],
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: conversation['unread'] ? FontWeight.bold : FontWeight.w600,
+                            color: AppColors.textColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        conversation['time'],
+                        style: TextStyle(
+                          color: conversation['unread'] ? AppColors.primaryColor : Colors.grey.shade500,
+                          fontSize: 12,
+                          fontWeight: conversation['unread'] ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          conversation['lastMessage'],
+                          style: TextStyle(
+                            color: conversation['unread'] ? Colors.grey.shade700 : Colors.grey.shade600,
+                            fontSize: 14,
+                            fontWeight: conversation['unread'] ? FontWeight.w500 : FontWeight.normal,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (conversation['unread'])
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          width: 8,
+                          height: 8,
+                          decoration: const BoxDecoration(
+                            color: AppColors.primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              conversation['name'],
-              style: TextStyle(
-                fontWeight: conversation['unread']
-                    ? FontWeight.bold
-                    : FontWeight.normal,
-              ),
-            ),
-          ),
-          Text(
-            conversation['time'],
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-      subtitle: Row(
-        children: [
-          Expanded(
-            child: Text(
-              conversation['lastMessage'],
-              style: TextStyle(
-                color: conversation['unread'] ? Colors.black : Colors.grey,
-                fontWeight: conversation['unread']
-                    ? FontWeight.bold
-                    : FontWeight.normal,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          if (conversation['unread'])
-            Container(
-              width: 10,
-              height: 10,
-              decoration: const BoxDecoration(
-                color: AppColors.primaryColor,
-                shape: BoxShape.circle,
-              ),
-            ),
-        ],
-      ),
-      onTap: () {
-        // Open conversation
-      },
     );
   }
 
   Widget _buildShimmerList() {
     return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
       itemCount: 5,
       itemBuilder: (context, index) {
-        return Shimmer.fromColors(
-          baseColor: Colors.grey.shade300,
-          highlightColor: Colors.grey.shade100,
-          child: Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  // Avatar placeholder
-                  Container(
-                    width: 50,
-                    height: 50,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 15),
-                  // Text content placeholders
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Name placeholder
-                        Container(
-                          height: 20,
-                          width: 120,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(height: 10),
-                        // Message placeholder
-                        Container(
-                          height: 15,
-                          width: double.infinity,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(height: 5),
-                        // Time placeholder
-                        Container(
-                          height: 12,
-                          width: 60,
-                          color: Colors.white,
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Unread indicator placeholder
-                  Container(
-                    width: 10,
-                    height: 10,
-                    decoration: const BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ],
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Shimmer.fromColors(
+            baseColor: Colors.grey.shade200,
+            highlightColor: Colors.grey.shade50,
+            child: Container(
+              height: 86,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(14),
               ),
             ),
           ),

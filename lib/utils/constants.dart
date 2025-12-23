@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  // Updated WeNest Brand Colors from logo
-  static const Color primaryColor = Color(0xFF0A3F3F);      // Dark teal from logo
-  static const Color secondaryColor = Color(0xFFC9A961);    // Gold from logo
-  static const Color accentColor = Color(0xFFD4AF37);       // Bright gold accent
-  static const Color backgroundColor = Color(0xFFF5F5F5);    // Light background
-  static const Color textColor = Color(0xFF212121);          // Dark text
-  static const Color errorColor = Color(0xFFD32F2F);         // Error red
-  static const Color lightTeal = Color(0xFF1A5F5F);          // Lighter teal for gradients
-  static const Color darkTeal = Color(0xFF062828);           // Darker teal
+  static const Color primaryColor = Color(0xFF0A3F3F);
+  static const Color secondaryColor = Color(0xFFC9A961);
+  static const Color accentColor = Color(0xFFD4AF37);
+  static const Color backgroundColor = Color(0xFFF5F5F5);
+  static const Color textColor = Color(0xFF212121);
+  static const Color errorColor = Color(0xFFD32F2F);
+  static const Color lightTeal = Color(0xFF1A5F5F);
+  static const Color darkTeal = Color(0xFF062828);
 }
 
 class AppStrings {
@@ -46,6 +45,10 @@ class AppRoutes {
   static const String userMessages = '/user_messages';
   static const String userProfile = '/user_profile';
   
+  // Agent routes
+  static const String agentRegistration = '/agent_registration';
+  static const String agentDashboard = '/agent_dashboard';
+  
   // Agency routes
   static const String agencyRegistration = '/agency_registration';
   static const String agencyDashboard = '/agency_dashboard';
@@ -54,10 +57,6 @@ class AppRoutes {
   static const String landlordRegistration = '/landlord_registration';
   static const String landlordDashboard = '/landlord_dashboard';
   
-  // Admin routes
-  static const String adminLogin = '/admin_login';
-  static const String adminDashboard = '/admin_dashboard';
-  
   // Notification routes
   static const String notifications = '/notifications';
   static const String notificationsDetails = '/notifications_details';
@@ -65,11 +64,10 @@ class AppRoutes {
 }
 
 enum UserType {
-  user,
-  agent,          // Regular agent
-  agencyAdmin,    // Agency administrator
-  landlord,
-  admin
+  user,           // Regular user looking for properties
+  agent,          // Real estate agent (can be affiliated or standalone)
+  agency,    // Agency
+  landlord,       // Property owner/landlord
 }
 
 class UserTypeHelper {
@@ -79,12 +77,10 @@ class UserTypeHelper {
         return 'user';
       case UserType.agent:
         return 'agent';
-      case UserType.agencyAdmin:
-        return 'agency_admin';
+      case UserType.agency:
+        return 'agency';
       case UserType.landlord:
         return 'landlord';
-      case UserType.admin:
-        return 'admin';
     }
   }
   
@@ -95,19 +91,55 @@ class UserTypeHelper {
         return UserType.user;
       case 'agent':
         return UserType.agent;
-      case 'agency_admin':
-        return UserType.agencyAdmin;
+      case 'agency':
+        return UserType.agency;
       case 'landlord':
         return UserType.landlord;
-      case 'admin':
-        return UserType.admin;
       default:
         return null;
     }
   }
+
+  static String getUserTypeDisplayName(UserType type) {
+    switch (type) {
+      case UserType.user:
+        return 'Regular User';
+      case UserType.agent:
+        return 'Real Estate Agent';
+      case UserType.agency:
+        return 'Agency';
+      case UserType.landlord:
+        return 'Property Owner/Landlord';
+    }
+  }
+
+  static String getUserTypeDescription(UserType type) {
+    switch (type) {
+      case UserType.user:
+        return 'Search and browse properties, save favorites, and connect with agencies';
+      case UserType.agent:
+        return 'List properties, manage listings, and connect with clients';
+      case UserType.agency:
+        return 'Manage your real estate agency, agents, and property listings';
+      case UserType.landlord:
+        return 'List your properties for rent or sale directly';
+    }
+  }
+
+  static IconData getUserTypeIcon(UserType type) {
+    switch (type) {
+      case UserType.user:
+        return Icons.person;
+      case UserType.agent:
+        return Icons.badge;
+      case UserType.agency:
+        return Icons.business;
+      case UserType.landlord:
+        return Icons.house;
+    }
+  }
 }
 
-// Asset paths for images
 class AppAssets {
   // Logo assets
   static const String logo = 'assets/images/logo.png';

@@ -29,17 +29,22 @@ class Agency {
     this.updatedAt,
   });
 
+  // Getters for compatibility with UI code
+  String? get city => lga; // Map lga to city for compatibility
+  String? get contactPhone => phoneNumber;
+  String? get contactEmail => email;
+
   factory Agency.fromJson(Map<String, dynamic> json) {
     return Agency(
       id: json['id'] as String,
       name: json['name'] as String,
       description: json['description'] as String?,
       logoUrl: json['logo_url'] as String?,
-      email: json['email'] as String?,
-      phoneNumber: json['phone_number'] as String?,
+      email: json['contact_email'] as String? ?? json['email'] as String?,
+      phoneNumber: json['contact_phone'] as String? ?? json['phone_number'] as String?,
       address: json['address'] as String?,
       state: json['state'] as String?,
-      lga: json['lga'] as String?,
+      lga: json['city'] as String? ?? json['lga'] as String?,
       verified: json['verified'] as bool? ?? false,
       isActive: json['is_active'] as bool? ?? true,
       createdAt: DateTime.parse(json['created_at'] as String),
@@ -56,10 +61,13 @@ class Agency {
       'description': description,
       'logo_url': logoUrl,
       'email': email,
+      'contact_email': email,
       'phone_number': phoneNumber,
+      'contact_phone': phoneNumber,
       'address': address,
       'state': state,
       'lga': lga,
+      'city': lga,
       'verified': verified,
       'is_active': isActive,
       'created_at': createdAt.toIso8601String(),

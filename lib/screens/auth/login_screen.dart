@@ -26,9 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final response = await SupabaseService().signIn(
@@ -36,67 +34,18 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
 
-      if (mounted) {
-        if (response.user != null) {
-          // Get user type from profile
-          final userType = await SupabaseService().getUserType(response.user!.id);
-          
-          // Navigate based on user type
-          if (userType != null) {
-            _navigateBasedOnUserType(userType);
-          } else {
-            // No user type set, go to role selection
-            Navigator.pushReplacementNamed(context, AppRoutes.roleSelection);
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid credentials. Please try again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (mounted && response.user != null) {
+        final route = await SupabaseService().getDashboardRoute(response.user!.id);
+        Navigator.pushReplacementNamed(context, route);
       }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: ${error.toString()}'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Login failed: ${error.toString()}'), backgroundColor: Colors.red),
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  void _navigateBasedOnUserType(String userType) {
-    final type = UserTypeHelper.stringToUserType(userType);
-    
-    switch (type) {
-      case UserType.user:
-        Navigator.pushReplacementNamed(context, AppRoutes.userHome);
-        break;
-      case UserType.agent:
-        Navigator.pushReplacementNamed(context, AppRoutes.agencyDashboard);
-        break;
-      case UserType.agencyAdmin:
-        Navigator.pushReplacementNamed(context, AppRoutes.agencyDashboard);
-        break;
-      case UserType.landlord:
-        Navigator.pushReplacementNamed(context, AppRoutes.landlordDashboard);
-        break;
-      case UserType.admin:
-        Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
-        break;
-      case null:
-        Navigator.pushReplacementNamed(context, AppRoutes.roleSelection);
-        break;
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -108,10 +57,7 @@ class _LoginScreenState extends State<LoginScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppColors.primaryColor,
-              AppColors.secondaryColor,
-            ],
+            colors: [AppColors.primaryColor, AppColors.secondaryColor],
           ),
         ),
         child: SafeArea(
@@ -124,88 +70,65 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Logo
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Icon(
-                          Icons.home_work,
-                          size: 50,
-                          color: AppColors.primaryColor,
-                        ),
+                      // WeNest Logo
+                      Image.asset(
+                        'assets/images/splash.png', // Your golden logo
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.contain,
                       ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      const Text(
-                        AppStrings.appName,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 5),
-                      
-                      const Text(
+                      const SizedBox(height: 16),
+
+                      // Larger, elegant tagline
+                      Text(
                         AppStrings.appTagline,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white70,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                          letterSpacing: 1.8,
+                          height: 1.3,
                         ),
+                        textAlign: TextAlign.center,
                       ),
-                      
-                      const SizedBox(height: 40),
-                      
-                      // Login form
+                      const SizedBox(height: 50),
+
+                      // Login form card
                       Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
+                        elevation: 12,
+                        shadowColor: Colors.black26,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                         child: Padding(
-                          padding: const EdgeInsets.all(24.0),
+                          padding: const EdgeInsets.all(28.0),
                           child: Column(
                             children: [
                               const Text(
                                 'Welcome Back',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
                               ),
-                              
-                              const SizedBox(height: 20),
-                              
-                              // Email field
+                              const SizedBox(height: 24),
+
                               TextFormField(
                                 controller: _emailController,
                                 keyboardType: TextInputType.emailAddress,
                                 decoration: InputDecoration(
                                   labelText: 'Email Address',
                                   prefixIcon: const Icon(Icons.email),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your email';
-                                  }
-                                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                                    return 'Please enter a valid email';
-                                  }
+                                  if (value == null || value.isEmpty) return 'Please enter your email';
+                                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return 'Please enter a valid email';
                                   return null;
                                 },
                               ),
-                              
-                              const SizedBox(height: 15),
-                              
-                              // Password field
+                              const SizedBox(height: 16),
+
                               TextFormField(
                                 controller: _passwordController,
                                 obscureText: _obscurePassword,
@@ -213,91 +136,55 @@ class _LoginScreenState extends State<LoginScreen> {
                                   labelText: 'Password',
                                   prefixIcon: const Icon(Icons.lock),
                                   suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _obscurePassword
-                                          ? Icons.visibility_off
-                                          : Icons.visibility,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    },
+                                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                   ),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your password';
-                                  }
-                                  if (value.length < 6) {
-                                    return 'Password must be at least 6 characters';
-                                  }
+                                  if (value == null || value.isEmpty) return 'Please enter your password';
+                                  if (value.length < 6) return 'Password must be at least 6 characters';
                                   return null;
                                 },
                               ),
-                              
-                              const SizedBox(height: 20),
-                              
-                              // Login button
+                              const SizedBox(height: 28),
+
                               SizedBox(
                                 width: double.infinity,
+                                height: 56,
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : _handleLogin,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primaryColor,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 15),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(30),
-                                    ),
+                                    elevation: 6,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                                   ),
                                   child: _isLoading
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text(
-                                          'Login',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
+                                      ? const CircularProgressIndicator(color: Colors.white)
+                                      : const Text('Login', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                                 ),
                               ),
-                              
                               const SizedBox(height: 20),
-                              
-                              // Forgot password
+
                               TextButton(
-                                onPressed: () {
-                                  Navigator.pushNamed(context, AppRoutes.forgotPassword);
-                                },
-                                child: const Text('Forgot Password?'),
+                                onPressed: () => Navigator.pushNamed(context, AppRoutes.forgotPassword),
+                                child: const Text('Forgot Password?', style: TextStyle(fontSize: 16)),
                               ),
-                              
-                              const SizedBox(height: 20),
-                              
-                              // Sign up link
+                              const SizedBox(height: 10),
+
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Text("Don't have an account? "),
                                   TextButton(
-                                    onPressed: () {
-                                      Navigator.pushReplacementNamed(
-                                        context,
-                                        AppRoutes.signup,
-                                      );
-                                    },
-                                    child: const Text('Sign Up'),
+                                    onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.signup),
+                                    child: const Text('Sign Up', style: TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),

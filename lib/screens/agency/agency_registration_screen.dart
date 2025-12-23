@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:wenest/utils/constants.dart';
+import 'package:wenest/services/supabase_service.dart';
 
 class AgencyRegistrationScreen extends StatefulWidget {
   const AgencyRegistrationScreen({super.key});
@@ -12,17 +13,24 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _agencyNameController = TextEditingController();
   final _rcNumberController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _officeAddressController = TextEditingController();
+  final _stateController = TextEditingController();
+  final _cityController = TextEditingController();
   final _phoneNumberController = TextEditingController();
   final _emailAddressController = TextEditingController();
   final _websiteController = TextEditingController();
   bool _isLoading = false;
+  bool _agreedToTerms = false;
 
   @override
   void dispose() {
     _agencyNameController.dispose();
     _rcNumberController.dispose();
+    _descriptionController.dispose();
     _officeAddressController.dispose();
+    _stateController.dispose();
+    _cityController.dispose();
     _phoneNumberController.dispose();
     _emailAddressController.dispose();
     _websiteController.dispose();
@@ -32,14 +40,48 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
   Future<void> _handleAgencyRegistration() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (!_agreedToTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please agree to the Terms and Conditions'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // In a real app, this would register the agency with Supabase
-      // For now, we'll simulate the registration process
-      await Future.delayed(const Duration(seconds: 2));
+      // Get current user
+      final user = SupabaseService().getCurrentUser();
+      if (user == null) {
+        throw Exception('No user logged in');
+      }
+
+      // Create agency in Supabase
+      await SupabaseService().createAgency(
+        profileId: user.id,
+        name: _agencyNameController.text.trim(),
+        registrationNumber: _rcNumberController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty 
+            ? null 
+            : _descriptionController.text.trim(),
+        contactEmail: _emailAddressController.text.trim(),
+        contactPhone: _phoneNumberController.text.trim(),
+        address: _officeAddressController.text.trim(),
+        state: _stateController.text.trim().isEmpty 
+            ? null 
+            : _stateController.text.trim(),
+        city: _cityController.text.trim().isEmpty 
+            ? null 
+            : _cityController.text.trim(),
+        website: _websiteController.text.trim().isEmpty 
+            ? null 
+            : _websiteController.text.trim(),
+      );
       
       // Show success message
       if (mounted) {
@@ -47,6 +89,7 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
           const SnackBar(
             content: Text('Agency registration submitted successfully! Our team will review and verify your account.'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
           ),
         );
         
@@ -57,8 +100,9 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: ${error.toString()}'),
+            content: Text('Registration failed: ${error.toString()}'),
             backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
           ),
         );
       }
@@ -128,6 +172,9 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your agency name';
                     }
+                    if (value.length < 3) {
+                      return 'Agency name must be at least 3 characters';
+                    }
                     return null;
                   },
                 ),
@@ -138,7 +185,7 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                 TextFormField(
                   controller: _rcNumberController,
                   decoration: InputDecoration(
-                    labelText: 'RC Number *',
+                    labelText: 'Registration Number (RC Number) *',
                     prefixIcon: const Icon(Icons.confirmation_number),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
@@ -146,10 +193,27 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
-                      return 'Please enter your RC number';
+                      return 'Please enter your registration number';
                     }
                     return null;
                   },
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // Description
+                TextFormField(
+                  controller: _descriptionController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Agency Description (Optional)',
+                    alignLabelWithHint: true,
+                    prefixIcon: const Icon(Icons.description),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    hintText: 'Describe your agency and services...',
+                  ),
                 ),
                 
                 const SizedBox(height: 15),
@@ -172,6 +236,34 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                     }
                     return null;
                   },
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // State
+                TextFormField(
+                  controller: _stateController,
+                  decoration: InputDecoration(
+                    labelText: 'State (Optional)',
+                    prefixIcon: const Icon(Icons.map),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 15),
+                
+                // City
+                TextFormField(
+                  controller: _cityController,
+                  decoration: InputDecoration(
+                    labelText: 'City (Optional)',
+                    prefixIcon: const Icon(Icons.location_city),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
                 ),
                 
                 const SizedBox(height: 30),
@@ -234,12 +326,14 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                 // Website
                 TextFormField(
                   controller: _websiteController,
+                  keyboardType: TextInputType.url,
                   decoration: InputDecoration(
                     labelText: 'Website (Optional)',
                     prefixIcon: const Icon(Icons.web),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
+                    hintText: 'https://www.example.com',
                   ),
                 ),
                 
@@ -249,12 +343,23 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                 Row(
                   children: [
                     Checkbox(
-                      value: true,
-                      onChanged: (bool? value) {},
+                      value: _agreedToTerms,
+                      onChanged: (bool? value) {
+                        setState(() {
+                          _agreedToTerms = value ?? false;
+                        });
+                      },
                     ),
-                    const Expanded(
-                      child: Text(
-                        'I agree to the Terms and Conditions and Privacy Policy',
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _agreedToTerms = !_agreedToTerms;
+                          });
+                        },
+                        child: const Text(
+                          'I agree to the Terms and Conditions and Privacy Policy',
+                        ),
                       ),
                     ),
                   ],
@@ -269,14 +374,20 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                     onPressed: _isLoading ? null : _handleAgencyRegistration,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
+                      foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),
                     ),
                     child: _isLoading
-                        ? const CircularProgressIndicator(
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                              strokeWidth: 2,
+                            ),
                           )
                         : const Text(
                             'Register Agency',
@@ -290,13 +401,13 @@ class _AgencyRegistrationScreenState extends State<AgencyRegistrationScreen> {
                 
                 const SizedBox(height: 20),
                 
-                // Back to role selection
+                // Back button
                 Center(
                   child: TextButton(
-                    onPressed: () {
+                    onPressed: _isLoading ? null : () {
                       Navigator.pop(context);
                     },
-                    child: const Text('Back to Role Selection'),
+                    child: const Text('← Back'),
                   ),
                 ),
               ],

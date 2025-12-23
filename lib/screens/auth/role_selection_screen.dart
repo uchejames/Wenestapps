@@ -12,10 +12,7 @@ class RoleSelectionScreen extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppColors.primaryColor,
-              AppColors.secondaryColor,
-            ],
+            colors: [AppColors.primaryColor, AppColors.secondaryColor],
           ),
         ),
         child: SafeArea(
@@ -49,28 +46,21 @@ class RoleSelectionScreen extends StatelessWidget {
                     children: [
                       _buildRoleCard(
                         context,
-                        'Regular User',
-                        'Search and browse properties, save favorites, and connect with agencies',
-                        Icons.person,
-                        AppColors.primaryColor,
                         UserType.user,
                       ),
                       const SizedBox(height: 20),
                       _buildRoleCard(
                         context,
-                        'Real Estate Agent',
-                        'List properties, manage listings, and connect with clients',
-                        Icons.business,
-                        AppColors.secondaryColor,
                         UserType.agent,
                       ),
                       const SizedBox(height: 20),
                       _buildRoleCard(
                         context,
-                        'Property Owner/Landlord',
-                        'List your properties for rent or sale directly',
-                        Icons.house,
-                        AppColors.accentColor,
+                        UserType.agency,
+                      ),
+                      const SizedBox(height: 20),
+                      _buildRoleCard(
+                        context,
                         UserType.landlord,
                       ),
                     ],
@@ -109,14 +99,27 @@ class RoleSelectionScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildRoleCard(
-    BuildContext context,
-    String title,
-    String description,
-    IconData icon,
-    Color color,
-    UserType userType,
-  ) {
+  Widget _buildRoleCard(BuildContext context, UserType userType) {
+    final displayName = UserTypeHelper.getUserTypeDisplayName(userType);
+    final description = UserTypeHelper.getUserTypeDescription(userType);
+    final icon = UserTypeHelper.getUserTypeIcon(userType);
+    
+    Color color;
+    switch (userType) {
+      case UserType.user:
+        color = AppColors.primaryColor;
+        break;
+      case UserType.agent:
+        color = AppColors.secondaryColor;
+        break;
+      case UserType.agency:
+        color = AppColors.accentColor;
+        break;
+      case UserType.landlord:
+        color = Colors.teal;
+        break;
+    }
+
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(
@@ -124,7 +127,6 @@ class RoleSelectionScreen extends StatelessWidget {
       ),
       child: InkWell(
         onTap: () {
-          // Navigate to signup with selected user type
           Navigator.pushNamed(
             context,
             AppRoutes.signup,
@@ -155,7 +157,7 @@ class RoleSelectionScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      displayName,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

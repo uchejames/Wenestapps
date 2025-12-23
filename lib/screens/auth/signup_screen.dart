@@ -23,7 +23,6 @@ class _SignupScreenState extends State<SignupScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Get the user type passed from role selection screen
     final args = ModalRoute.of(context)?.settings.arguments;
     if (args is UserType) {
       _selectedUserType = args;
@@ -53,9 +52,7 @@ class _SignupScreenState extends State<SignupScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
       final response = await SupabaseService().signUp(
@@ -65,26 +62,16 @@ class _SignupScreenState extends State<SignupScreen> {
         userType: UserTypeHelper.userTypeToString(_selectedUserType!),
       );
 
-      if (mounted) {
-        if (response.user != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Account created successfully! Please check your email to verify your account.'),
-              backgroundColor: Colors.green,
-              duration: Duration(seconds: 5),
-            ),
-          );
-          
-          // Navigate based on user type
-          _navigateBasedOnUserType(_selectedUserType!);
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to create account. Please try again.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (mounted && response.user != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account created successfully! Please check your email to verify your account.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 5),
+          ),
+        );
+        
+        _navigateBasedOnUserType(_selectedUserType!);
       }
     } catch (error) {
       if (mounted) {
@@ -96,49 +83,32 @@ class _SignupScreenState extends State<SignupScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   void _navigateBasedOnUserType(UserType userType) {
+    String route;
     switch (userType) {
       case UserType.user:
-        Navigator.pushReplacementNamed(context, AppRoutes.userHome);
+        route = AppRoutes.userHome;
         break;
       case UserType.agent:
-        Navigator.pushReplacementNamed(context, AppRoutes.agencyRegistration);
+        route = AppRoutes.agentRegistration;
         break;
-      case UserType.agencyAdmin:
-        Navigator.pushReplacementNamed(context, AppRoutes.agencyRegistration);
+      case UserType.agency:
+        route = AppRoutes.agencyRegistration;
         break;
       case UserType.landlord:
-        Navigator.pushReplacementNamed(context, AppRoutes.landlordRegistration);
-        break;
-      case UserType.admin:
-        Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
+        route = AppRoutes.landlordRegistration;
         break;
     }
+    Navigator.pushReplacementNamed(context, route);
   }
 
   String _getUserTypeTitle() {
     if (_selectedUserType == null) return 'Create Account';
-    
-    switch (_selectedUserType!) {
-      case UserType.user:
-        return 'Create User Account';
-      case UserType.agent:
-        return 'Create Agent Account';
-      case UserType.landlord:
-        return 'Create Landlord Account';
-      case UserType.agencyAdmin:
-        return 'Create Agency Admin Account';
-      case UserType.admin:
-        return 'Create Admin Account';
-    }
+    return 'Create ${UserTypeHelper.getUserTypeDisplayName(_selectedUserType!)} Account';
   }
 
   @override
@@ -149,10 +119,7 @@ class _SignupScreenState extends State<SignupScreen> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              AppColors.primaryColor,
-              AppColors.secondaryColor,
-            ],
+            colors: [AppColors.primaryColor, AppColors.secondaryColor],
           ),
         ),
         child: SafeArea(
@@ -165,86 +132,71 @@ class _SignupScreenState extends State<SignupScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Logo
-                      Container(
-                        width: 100,
-                        height: 100,
-                        decoration: BoxDecoration(
+                      // WeNest Logo (replaced icon)
+                      Image.asset(
+                        'assets/images/splash.png', // Make sure this path matches your logo file
+                        width: 80,
+                        height: 80,
+                        fit: BoxFit.contain,
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Tagline - made larger and more elegant
+                      Text(
+                        AppStrings.appTagline,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w500,
                           color: Colors.white,
+                          letterSpacing: 1.8,
+                          height: 1.3,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 50),
+
+                      // Signup form card
+                      Card(
+                        elevation: 12,
+                        shadowColor: Colors.black26,
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Icon(
-                          Icons.home_work,
-                          size: 50,
-                          color: AppColors.primaryColor,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 20),
-                      
-                      const Text(
-                        AppStrings.appName,
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 5),
-                      
-                      const Text(
-                        AppStrings.appTagline,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: Colors.white70,
-                        ),
-                      ),
-                      
-                      const SizedBox(height: 40),
-                      
-                      // Signup form
-                      Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
                         child: Padding(
-                          padding: const EdgeInsets.all(24.0),
+                          padding: const EdgeInsets.all(28.0),
                           child: Column(
                             children: [
                               Text(
                                 _getUserTypeTitle(),
-                                style: const TextStyle(
-                                  fontSize: 20,
+                                style: TextStyle(
+                                  fontSize: 22,
                                   fontWeight: FontWeight.bold,
+                                  color: AppColors.textColor,
                                 ),
                               ),
-                              
-                              const SizedBox(height: 20),
-                              
+                              const SizedBox(height: 24),
+
                               // Name field
                               TextFormField(
                                 controller: _nameController,
                                 decoration: InputDecoration(
                                   labelText: 'Full Name',
                                   prefixIcon: const Icon(Icons.person),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your full name';
-                                  }
-                                  if (value.length < 3) {
-                                    return 'Name must be at least 3 characters';
-                                  }
+                                  if (value == null || value.isEmpty) return 'Please enter your full name';
+                                  if (value.length < 3) return 'Name must be at least 3 characters';
                                   return null;
                                 },
                               ),
-                              
-                              const SizedBox(height: 15),
-                              
+                              const SizedBox(height: 16),
+
                               // Email field
                               TextFormField(
                                 controller: _emailController,
@@ -252,23 +204,21 @@ class _SignupScreenState extends State<SignupScreen> {
                                 decoration: InputDecoration(
                                   labelText: 'Email Address',
                                   prefixIcon: const Icon(Icons.email),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter your email';
-                                  }
-                                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) {
-                                    return 'Please enter a valid email';
-                                  }
+                                  if (value == null || value.isEmpty) return 'Please enter your email';
+                                  if (!RegExp(r'^[^@]+@[^@]+\.[^@]+').hasMatch(value)) return 'Please enter a valid email';
                                   return null;
                                 },
                               ),
-                              
-                              const SizedBox(height: 15),
-                              
+                              const SizedBox(height: 16),
+
                               // Password field
                               TextFormField(
                                 controller: _passwordController,
@@ -277,35 +227,25 @@ class _SignupScreenState extends State<SignupScreen> {
                                   labelText: 'Password',
                                   prefixIcon: const Icon(Icons.lock),
                                   suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _obscurePassword
-                                          ? Icons.visibility_off
-                                          : Icons.visibility,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscurePassword = !_obscurePassword;
-                                      });
-                                    },
+                                    icon: Icon(_obscurePassword ? Icons.visibility_off : Icons.visibility),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                   ),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please enter a password';
-                                  }
-                                  if (value.length < 6) {
-                                    return 'Password must be at least 6 characters';
-                                  }
+                                  if (value == null || value.isEmpty) return 'Please enter a password';
+                                  if (value.length < 6) return 'Password must be at least 6 characters';
                                   return null;
                                 },
                               ),
-                              
-                              const SizedBox(height: 15),
-                              
-                              // Confirm Password field
+                              const SizedBox(height: 16),
+
+                              // Confirm Password
                               TextFormField(
                                 controller: _confirmPasswordController,
                                 obscureText: _obscureConfirmPassword,
@@ -313,94 +253,59 @@ class _SignupScreenState extends State<SignupScreen> {
                                   labelText: 'Confirm Password',
                                   prefixIcon: const Icon(Icons.lock),
                                   suffixIcon: IconButton(
-                                    icon: Icon(
-                                      _obscureConfirmPassword
-                                          ? Icons.visibility_off
-                                          : Icons.visibility,
-                                    ),
-                                    onPressed: () {
-                                      setState(() {
-                                        _obscureConfirmPassword = !_obscureConfirmPassword;
-                                      });
-                                    },
+                                    icon: Icon(_obscureConfirmPassword ? Icons.visibility_off : Icons.visibility),
+                                    onPressed: () => setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
                                   ),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade50,
                                   border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10),
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
                                 validator: (value) {
-                                  if (value == null || value.isEmpty) {
-                                    return 'Please confirm your password';
-                                  }
-                                  if (value != _passwordController.text) {
-                                    return 'Passwords do not match';
-                                  }
+                                  if (value == null || value.isEmpty) return 'Please confirm your password';
+                                  if (value != _passwordController.text) return 'Passwords do not match';
                                   return null;
                                 },
                               ),
-                              
-                              const SizedBox(height: 20),
-                              
-                              // Signup button
+                              const SizedBox(height: 28),
+
+                              // Sign Up button
                               SizedBox(
                                 width: double.infinity,
+                                height: 56,
                                 child: ElevatedButton(
                                   onPressed: _isLoading ? null : _handleSignup,
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: AppColors.primaryColor,
                                     foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(vertical: 15),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(30),
-                                    ),
+                                    elevation: 6,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                                   ),
                                   child: _isLoading
-                                      ? const SizedBox(
-                                          height: 20,
-                                          width: 20,
-                                          child: CircularProgressIndicator(
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                                            strokeWidth: 2,
-                                          ),
-                                        )
+                                      ? const CircularProgressIndicator(color: Colors.white)
                                       : const Text(
                                           'Sign Up',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                                         ),
                                 ),
                               ),
-                              
                               const SizedBox(height: 20),
-                              
-                              // Back to role selection
+
                               TextButton(
-                                onPressed: () {
-                                  Navigator.pushReplacementNamed(
-                                    context,
-                                    AppRoutes.roleSelection,
-                                  );
-                                },
-                                child: const Text('← Change Role'),
+                                onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.roleSelection),
+                                child: const Text('← Change Role', style: TextStyle(fontSize: 16)),
                               ),
-                              
                               const SizedBox(height: 10),
-                              
-                              // Login link
+
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
                                   const Text("Already have an account? "),
                                   TextButton(
-                                    onPressed: () {
-                                      Navigator.pushReplacementNamed(
-                                        context, 
-                                        AppRoutes.login,
-                                      );
-                                    },
-                                    child: const Text('Login'),
+                                    onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.login),
+                                    child: const Text('Login', style: TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ],
                               ),

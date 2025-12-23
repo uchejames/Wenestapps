@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:wenest/services/supabase_service.dart';
-import 'package:wenest/utils/constants.dart';
+import 'package:flutter/services.dart';
+import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/supabase_service.dart';
+import '../../utils/constants.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -9,82 +12,89 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
+  late Animation<double> _logoFade;
+  late Animation<double> _logoScale;
+  late Animation<double> _taglineFade;
+  late Animation<double> _taglineSlide;
 
   @override
   void initState() {
     super.initState();
-    
-    // Setup animations
+
     _controller = AnimationController(
-      duration: const Duration(seconds: 2),
+      duration: const Duration(milliseconds: 2200),
       vsync: this,
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
+    _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+      ),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+    _logoScale = Tween<double>(begin: 0.7, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.1, 0.8, curve: Curves.elasticOut),
+      ),
+    );
+
+    _taglineFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+      ),
+    );
+
+    _taglineSlide = Tween<double>(begin: 20.0, end: 0.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.6, 1.0, curve: Curves.easeOutCubic),
+      ),
     );
 
     _controller.forward();
-
-    // Check authentication and navigate
-    _initializeApp();
+    _checkAuthAndNavigate();
   }
 
-  Future<void> _initializeApp() async {
-    // Wait for animation to complete
+  Future<void> _checkAuthAndNavigate() async {
     await Future.delayed(const Duration(seconds: 3));
 
     if (!mounted) return;
 
-    // Check if user is logged in
-    final currentUser = SupabaseService().getCurrentUser();
+    final supabaseService = SupabaseService();
+    final user = supabaseService.getCurrentUser();
 
-    if (currentUser != null) {
-      // User is logged in, get their type and navigate
-      final userType = await SupabaseService().getUserType(currentUser.id);
-      
-      if (userType != null) {
-        _navigateBasedOnUserType(userType);
-      } else {
-        // User has no type, go to role selection
-        Navigator.pushReplacementNamed(context, AppRoutes.roleSelection);
+    if (user != null) {
+      try {
+        final profile = await supabaseService.getProfile(user.id);
+        if (profile != null) {
+          final route = await supabaseService.getDashboardRoute(user.id);
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, route);
+        } else {
+          if (!mounted) return;
+          Navigator.pushReplacementNamed(context, '/login');
+        }
+      } catch (e) {
+        debugPrint('Error fetching profile: $e');
+        if (!mounted) return;
+        Navigator.pushReplacementNamed(context, '/login');
       }
     } else {
-      // User not logged in, go to language onboarding
-      Navigator.pushReplacementNamed(context, AppRoutes.languageOnboarding);
-    }
-  }
+      final prefs = await SharedPreferences.getInstance();
+      final hasSelectedLanguage = prefs.containsKey('language_code');
 
-  void _navigateBasedOnUserType(String userType) {
-    final type = UserTypeHelper.stringToUserType(userType);
-    
-    switch (type) {
-      case UserType.user:
-        Navigator.pushReplacementNamed(context, AppRoutes.userHome);
-        break;
-      case UserType.agent:
-        Navigator.pushReplacementNamed(context, AppRoutes.agencyDashboard);
-        break;
-      case UserType.agencyAdmin:
-        Navigator.pushReplacementNamed(context, AppRoutes.agencyDashboard);
-        break;
-      case UserType.landlord:
-        Navigator.pushReplacementNamed(context, AppRoutes.landlordDashboard);
-        break;
-      case UserType.admin:
-        Navigator.pushReplacementNamed(context, AppRoutes.adminDashboard);
-        break;
-      case null:
-        Navigator.pushReplacementNamed(context, AppRoutes.roleSelection);
-        break;
+      if (!mounted) return;
+
+      Navigator.pushReplacementNamed(
+        context,
+        hasSelectedLanguage ? '/onboarding' : '/language_onboarding',
+      );
     }
   }
 
@@ -96,88 +106,99 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              AppColors.darkTeal,
-              AppColors.primaryColor,
-              AppColors.lightTeal,
-            ],
-          ),
-        ),
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  // Logo
-                  Container(
-                    width: 200,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                    padding: const EdgeInsets.all(20),
-                    child: Image.asset(
-                      AppAssets.logoWhite,
-                      errorBuilder: (context, error, stackTrace) {
-                        // Fallback to icon if logo image not found
-                        return const Icon(
-                          Icons.home_work,
-                          size: 120,
-                          color: Colors.white,
-                        );
-                      },
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 30),
-                  
-                  // App name
-                  const Text(
-                    AppStrings.appName,
-                    style: TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                      letterSpacing: 2,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 10),
-                  
-                  // Tagline
-                  const Text(
-                    AppStrings.appTagline,
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.white70,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                  
-                  const SizedBox(height: 50),
-                  
-                  // Loading indicator
-                  const SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.secondaryColor),
-                      strokeWidth: 3,
-                    ),
-                  ),
-                ],
-              ),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        systemNavigationBarColor: Colors.transparent,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                AppColors.primaryColor,      // 0xFF0A3F3F
+                AppColors.darkTeal,          // 0xFF062828
+              ],
             ),
+          ),
+          // Removed the duplicate SafeArea - now handled globally
+          child: AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              return Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    FadeTransition(
+                      opacity: _logoFade,
+                      child: ScaleTransition(
+                        scale: _logoScale,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Container(
+                              width: 220,
+                              height: 220,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.08),
+                              ),
+                            ),
+                            Container(
+                              width: 180,
+                              height: 180,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.12),
+                              ),
+                            ),
+                            Container(
+                              width: 140,
+                              height: 140,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withOpacity(0.18),
+                              ),
+                              child: Center(
+                                child: Image.asset(
+                                  'assets/images/splash.png',
+                                  width: 90,
+                                  height: 90,
+                                  fit: BoxFit.contain,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 40),
+
+                    FadeTransition(
+                      opacity: _taglineFade,
+                      child: Transform.translate(
+                        offset: Offset(0, _taglineSlide.value),
+                        child: Text(
+                          AppStrings.appTagline,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 2.0,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ),

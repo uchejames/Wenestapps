@@ -4,21 +4,6 @@ import 'package:wenest/models/agency.dart';
 import 'package:wenest/models/agent.dart';
 import 'package:wenest/models/landlord.dart';
 import 'package:wenest/models/property.dart';
-import 'package:wenest/models/property_media.dart';
-import 'package:wenest/models/amenity.dart';
-import 'package:wenest/models/property_amenity.dart';
-import 'package:wenest/models/review.dart';
-import 'package:wenest/models/favorite.dart';
-import 'package:wenest/models/conversation.dart';
-import 'package:wenest/models/message.dart';
-import 'package:wenest/models/notification.dart' as app_notification;
-import 'package:wenest/models/transaction.dart';
-import 'package:wenest/models/subscription.dart';
-import 'package:wenest/models/property_view.dart';
-import 'package:wenest/models/report.dart';
-import 'package:wenest/models/support_ticket.dart';
-import 'package:wenest/models/saved_search.dart';
-import 'package:wenest/utils/constants.dart';
 
 class SupabaseService {
   static const String supabaseUrl = 'https://gcbpxkwwscylyjemdpcd.supabase.co';
@@ -31,7 +16,6 @@ class SupabaseService {
 
   SupabaseClient get client => Supabase.instance.client;
 
-  // Initialize Supabase
   static Future<void> initialize() async {
     await Supabase.initialize(
       url: supabaseUrl,
@@ -39,8 +23,8 @@ class SupabaseService {
     );
   }
 
-  /// Sign up a new user
-  /// The profile is automatically created via database trigger
+  // ============ AUTHENTICATION ============
+  
   Future<AuthResponse> signUp({
     required String email,
     required String password,
@@ -55,10 +39,6 @@ class SupabaseService {
         'user_type': userType ?? 'user',
       },
     );
-    
-    // Profile is automatically created by the database trigger
-    // No need to manually insert into profiles table
-    
     return response;
   }
 
@@ -66,11 +46,10 @@ class SupabaseService {
     required String email,
     required String password,
   }) async {
-    final response = await client.auth.signInWithPassword(
+    return await client.auth.signInWithPassword(
       email: email,
       password: password,
     );
-    return response;
   }
 
   Future<void> signOut() async {
@@ -81,13 +60,6 @@ class SupabaseService {
     await client.auth.resetPasswordForEmail(email);
   }
 
-  Future<void> updatePassword(String newPassword) async {
-    await client.auth.updateUser(
-      UserAttributes(password: newPassword),
-    );
-  }
-
-  // User methods
   User? getCurrentUser() {
     return client.auth.currentUser;
   }
@@ -96,30 +68,8 @@ class SupabaseService {
     return client.auth.onAuthStateChange;
   }
 
-  // Get user type from profile
-  Future<String?> getUserType(String userId) async {
-    try {
-      final response = await client
-          .from('profiles')
-          .select('user_type')
-          .eq('id', userId)
-          .single();
-      return response['user_type'] as String?;
-    } catch (e) {
-      print('Error getting user type: $e');
-      return null;
-    }
-  }
-
-  // Update user type
-  Future<void> updateUserType(String userId, String userType) async {
-    await client
-        .from('profiles')
-        .update({'user_type': userType})
-        .eq('id', userId);
-  }
-
-  // Profile methods
+  // ============ PROFILE METHODS ============
+  
   Future<Profile?> getProfile(String id) async {
     try {
       final response = await client
@@ -134,12 +84,25 @@ class SupabaseService {
     }
   }
 
-  Future<List<Profile>> getAllProfiles() async {
-    final response = await client
+  Future<String?> getUserType(String userId) async {
+    try {
+      final response = await client
+          .from('profiles')
+          .select('user_type')
+          .eq('id', userId)
+          .single();
+      return response['user_type'] as String?;
+    } catch (e) {
+      print('Error getting user type: $e');
+      return null;
+    }
+  }
+
+  Future<void> updateUserType(String userId, String userType) async {
+    await client
         .from('profiles')
-        .select()
-        .order('created_at', ascending: false);
-    return response.map((data) => Profile.fromJson(data)).toList();
+        .update({'user_type': userType})
+        .eq('id', userId);
   }
 
   Future<void> updateProfile({
@@ -157,33 +120,110 @@ class SupabaseService {
     };
 
     if (fullName != null) updates['full_name'] = fullName;
-    if (phoneNumber != null) updates['phone_number'] = phoneNumber;
+    if (phoneNumber != null) updates['phone'] = phoneNumber;
     if (avatarUrl != null) updates['avatar_url'] = avatarUrl;
     if (address != null) updates['address'] = address;
     if (state != null) updates['state'] = state;
     if (city != null) updates['city'] = city;
     if (bio != null) updates['bio'] = bio;
 
-    await client
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId);
+    await client.from('profiles').update(updates).eq('id', userId);
   }
 
-  // Agency methods
-  Future<List<Agency>> getAgencies() async {
-    final response = await client
-        .from('agencies')
-        .select()
-        .eq('verified', true)
-        .order('created_at', ascending: false);
-    return response.map((data) => Agency.fromJson(data)).toList();
+  // ============ PROPERTY METHODS ============
+  
+  Future<List<Property>> getProperties({
+    String? propertyType,
+    String? listingType,
+    String? state,
+    String? cityArea,
+    double? minPrice,
+    double? maxPrice,
+    int? minBedrooms,
+    int? maxBedrooms,
+    bool? isFeatured,
+    String? status = 'active',
+    int limit = 50,
+  }) async {
+    try {
+      var query = client
+          .from('properties')
+          .select()
+          .eq('is_approved', true);
+      
+      if (status != null) query = query.eq('status', status);
+      if (propertyType != null) query = query.eq('property_type', propertyType);
+      if (listingType != null) query = query.eq('listing_type', listingType);
+      if (state != null) query = query.eq('state', state);
+      if (cityArea != null) query = query.eq('city_area', cityArea);
+      if (minPrice != null) query = query.gte('price', minPrice);
+      if (maxPrice != null) query = query.lte('price', maxPrice);
+      if (minBedrooms != null) query = query.gte('bedrooms', minBedrooms);
+      if (maxBedrooms != null) query = query.lte('bedrooms', maxBedrooms);
+      if (isFeatured != null) query = query.eq('is_featured', isFeatured);
+      
+      final response = await query
+          .order('published_at', ascending: false)
+          .limit(limit);
+      
+      return (response as List).map((data) => Property.fromJson(data)).toList();
+    } catch (e) {
+      print('Error getting properties: $e');
+      return [];
+    }
+  }
+
+  Future<Property?> getPropertyById(String id) async {
+    try {
+      final response = await client
+          .from('properties')
+          .select()
+          .eq('id', id)
+          .single();
+      
+      // Increment views count
+      await incrementPropertyViews(id);
+      
+      return Property.fromJson(response);
+    } catch (e) {
+      print('Error getting property: $e');
+      return null;
+    }
+  }
+
+  Future<void> incrementPropertyViews(String propertyId) async {
+    try {
+      await client.rpc('increment_property_views', params: {'property_id': propertyId});
+    } catch (e) {
+      print('Error incrementing views: $e');
+    }
+  }
+
+  // ============ AGENCY METHODS ============
+  
+  Future<List<Agency>> getAgencies({bool? verified, int limit = 50}) async {
+    try {
+      var query = client.from('agency').select();
+      
+      if (verified != null) {
+        query = query.eq('verified', verified);
+      }
+      
+      final response = await query
+          .order('created_at', ascending: false)
+          .limit(limit);
+      
+      return (response as List).map((data) => Agency.fromJson(data)).toList();
+    } catch (e) {
+      print('Error getting agencies: $e');
+      return [];
+    }
   }
 
   Future<Agency?> getAgencyById(String id) async {
     try {
       final response = await client
-          .from('agencies')
+          .from('agency')
           .select()
           .eq('id', id)
           .single();
@@ -194,21 +234,114 @@ class SupabaseService {
     }
   }
 
-  // Agent methods
-  Future<List<Agent>> getAgents() async {
-    final response = await client
-        .from('agents')
-        .select()
-        .eq('verified', true)
-        .eq('is_active', true)
-        .order('created_at', ascending: false);
-    return response.map((data) => Agent.fromJson(data)).toList();
+  Future<Agency?> getAgencyByProfileId(String profileId) async {
+    try {
+      final response = await client
+          .from('agency')
+          .select()
+          .eq('profile_id', profileId)
+          .single();
+      return Agency.fromJson(response);
+    } catch (e) {
+      print('Error getting agency by profile: $e');
+      return null;
+    }
+  }
+
+  Future<String> createAgency({
+    required String profileId,
+    required String name,
+    required String registrationNumber,
+    String? description,
+    String? contactEmail,
+    String? contactPhone,
+    String? address,
+    String? state,
+    String? city,
+    String? website,
+  }) async {
+    try {
+      final response = await client.from('agency').insert({
+        'profile_id': profileId,
+        'name': name,
+        'registration_number': registrationNumber,
+        'description': description,
+        'contact_email': contactEmail,
+        'contact_phone': contactPhone,
+        'address': address,
+        'state': state,
+        'city': city,
+        'website': website,
+        'verified': false,
+        'created_at': DateTime.now().toIso8601String(),
+      }).select().single();
+      
+      await updateUserType(profileId, 'agency');
+      
+      return response['id'] as String;
+    } catch (e) {
+      print('Error creating agency: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateAgency({
+    required String agencyId,
+    String? name,
+    String? description,
+    String? contactEmail,
+    String? contactPhone,
+    String? address,
+    String? state,
+    String? city,
+    String? website,
+    String? logoUrl,
+  }) async {
+    final Map<String, dynamic> updates = {
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    if (name != null) updates['name'] = name;
+    if (description != null) updates['description'] = description;
+    if (contactEmail != null) updates['contact_email'] = contactEmail;
+    if (contactPhone != null) updates['contact_phone'] = contactPhone;
+    if (address != null) updates['address'] = address;
+    if (state != null) updates['state'] = state;
+    if (city != null) updates['city'] = city;
+    if (website != null) updates['website'] = website;
+    if (logoUrl != null) updates['logo_url'] = logoUrl;
+
+    await client.from('agency').update(updates).eq('id', agencyId);
+  }
+
+  // ============ AGENT METHODS ============
+  
+  Future<List<Agent>> getAgents({bool? verified, String? agencyId}) async {
+    try {
+      var query = client.from('agents_with_agency').select();
+      
+      if (verified != null) {
+        query = query.eq('verified', verified);
+      }
+      
+      if (agencyId != null) {
+        query = query.eq('agency_id', agencyId);
+      }
+      
+      query = query.eq('is_active', true);
+      
+      final response = await query.order('created_at', ascending: false);
+      return (response as List).map((data) => Agent.fromJson(data)).toList();
+    } catch (e) {
+      print('Error getting agents: $e');
+      return [];
+    }
   }
 
   Future<Agent?> getAgentById(String id) async {
     try {
       final response = await client
-          .from('agents')
+          .from('agents_with_agency')
           .select()
           .eq('id', id)
           .single();
@@ -219,14 +352,99 @@ class SupabaseService {
     }
   }
 
-  // Landlord methods
-  Future<List<Landlord>> getLandlords() async {
-    final response = await client
-        .from('landlords')
-        .select()
-        .eq('verified', true)
-        .order('created_at', ascending: false);
-    return response.map((data) => Landlord.fromJson(data)).toList();
+  Future<Agent?> getAgentByProfileId(String profileId) async {
+    try {
+      final response = await client
+          .from('agents_with_agency')
+          .select()
+          .eq('profile_id', profileId)
+          .single();
+      return Agent.fromJson(response);
+    } catch (e) {
+      print('Error getting agent by profile: $e');
+      return null;
+    }
+  }
+
+  Future<String> createAgent({
+    required String profileId,
+    String? agencyId,
+    required String displayName,
+    required String licenseNumber,
+    required int yearsOfExperience,
+    required List<String> specialization,
+    required String bio,
+    required String phone,
+    required String email,
+    String? whatsapp,
+  }) async {
+    try {
+      final response = await client.from('agents').insert({
+        'profile_id': profileId,
+        'agency_id': agencyId,
+        'display_name': displayName,
+        'license_number': licenseNumber,
+        'years_of_experience': yearsOfExperience,
+        'specialization': specialization,
+        'bio': bio,
+        'phone': phone,
+        'email': email,
+        'whatsapp': whatsapp,
+        'verified': false,
+        'is_active': true,
+        'created_at': DateTime.now().toIso8601String(),
+      }).select().single();
+      
+      await updateUserType(profileId, 'agent');
+      
+      return response['id'] as String;
+    } catch (e) {
+      print('Error creating agent: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> updateAgent({
+    required String agentId,
+    String? agencyId,
+    String? displayName,
+    String? bio,
+    String? phone,
+    String? email,
+    String? whatsapp,
+    List<String>? specialization,
+  }) async {
+    final Map<String, dynamic> updates = {
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    if (agencyId != null) updates['agency_id'] = agencyId;
+    if (displayName != null) updates['display_name'] = displayName;
+    if (bio != null) updates['bio'] = bio;
+    if (phone != null) updates['phone'] = phone;
+    if (email != null) updates['email'] = email;
+    if (whatsapp != null) updates['whatsapp'] = whatsapp;
+    if (specialization != null) updates['specialization'] = specialization;
+
+    await client.from('agents').update(updates).eq('id', agentId);
+  }
+
+  // ============ LANDLORD METHODS ============
+  
+  Future<List<Landlord>> getLandlords({bool? verified}) async {
+    try {
+      var query = client.from('landlords').select();
+      
+      if (verified != null) {
+        query = query.eq('verified', verified);
+      }
+      
+      final response = await query.order('created_at', ascending: false);
+      return (response as List).map((data) => Landlord.fromJson(data)).toList();
+    } catch (e) {
+      print('Error getting landlords: $e');
+      return [];
+    }
   }
 
   Future<Landlord?> getLandlordById(String id) async {
@@ -243,306 +461,99 @@ class SupabaseService {
     }
   }
 
-  // Property methods
-  Future<List<Property>> getProperties({
-    String? location,
-    String? propertyType,
-    num? minPrice,
-    num? maxPrice,
-    String? state,
-    String? lga,
-  }) async {
-    var query = client
-        .from('properties')
-        .select()
-        .eq('is_approved', true)
-        .eq('status', 'active');
-
-    if (location != null) {
-      query = query.ilike('location', '%$location%');
-    }
-
-    if (propertyType != null) {
-      query = query.eq('property_type', propertyType);
-    }
-
-    if (minPrice != null) {
-      query = query.gte('price', minPrice);
-    }
-
-    if (maxPrice != null) {
-      query = query.lte('price', maxPrice);
-    }
-
-    if (state != null) {
-      query = query.eq('state', state);
-    }
-
-    if (lga != null) {
-      query = query.eq('lga', lga);
-    }
-
-    final response = await query.order('created_at', ascending: false);
-    return response.map((data) => Property.fromJson(data)).toList();
-  }
-
-  Future<Property?> getPropertyById(String id) async {
+  Future<Landlord?> getLandlordByProfileId(String profileId) async {
     try {
       final response = await client
-          .from('properties')
+          .from('landlords')
           .select()
-          .eq('id', id)
-          .eq('is_approved', true)
-          .eq('status', 'active')
+          .eq('profile_id', profileId)
           .single();
-      return Property.fromJson(response);
+      return Landlord.fromJson(response);
     } catch (e) {
-      print('Error getting property: $e');
+      print('Error getting landlord by profile: $e');
       return null;
     }
   }
 
-  // Property Media methods
-  Future<List<PropertyMedia>> getPropertyMedia(String propertyId) async {
-    final response = await client
-        .from('property_media')
-        .select()
-        .eq('property_id', propertyId)
-        .order('display_order', ascending: true);
-    return response.map((data) => PropertyMedia.fromJson(data)).toList();
-  }
-
-  // Amenity methods
-  Future<List<Amenity>> getAmenities() async {
-    final response = await client
-        .from('amenities_master')
-        .select()
-        .order('name', ascending: true);
-    return response.map((data) => Amenity.fromJson(data)).toList();
-  }
-
-  // Property Amenity methods
-  Future<List<PropertyAmenity>> getPropertyAmenities(String propertyId) async {
-    final response = await client
-        .from('property_amenities')
-        .select()
-        .eq('property_id', propertyId);
-    return response.map((data) => PropertyAmenity.fromJson(data)).toList();
-  }
-
-  // Review methods
-  Future<List<Review>> getPropertyReviews(String propertyId) async {
-    final response = await client
-        .from('reviews')
-        .select()
-        .eq('property_id', propertyId)
-        .order('created_at', ascending: false);
-    return response.map((data) => Review.fromJson(data)).toList();
-  }
-
-  // Favorite methods
-  Future<List<Favorite>> getUserFavorites(String userId) async {
-    final response = await client
-        .from('favorites')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    return response.map((data) => Favorite.fromJson(data)).toList();
-  }
-
-  Future<void> addFavorite({
-    required String userId,
-    required String propertyId,
+  Future<String> createLandlord({
+    required String profileId,
+    String? companyName,
+    required String email,
+    required String phone,
+    required String address,
+    required String state,
+    required String city,
   }) async {
-    await client.from('favorites').insert({
-      'user_id': userId,
-      'property_id': propertyId,
-      'created_at': DateTime.now().toIso8601String(),
-    });
+    try {
+      final response = await client.from('landlords').insert({
+        'profile_id': profileId,
+        'company_name': companyName,
+        'email': email,
+        'phone': phone,
+        'address': address,
+        'state': state,
+        'city': city,
+        'verified': false,
+        'properties_count': 0,
+        'created_at': DateTime.now().toIso8601String(),
+      }).select().single();
+      
+      await updateUserType(profileId, 'landlord');
+      
+      return response['id'] as String;
+    } catch (e) {
+      print('Error creating landlord: $e');
+      rethrow;
+    }
   }
 
-  Future<void> removeFavorite({
-    required String userId,
-    required String propertyId,
-  }) async {
-    await client
-        .from('favorites')
-        .delete()
-        .eq('user_id', userId)
-        .eq('property_id', propertyId);
+  // ============ HELPER METHODS ============
+  
+  Future<bool> hasCompletedRoleRegistration(String userId, String userType) async {
+    try {
+      switch (userType.toLowerCase()) {
+        case 'agent':
+          final agent = await getAgentByProfileId(userId);
+          return agent != null;
+        case 'agency':
+          final agency = await getAgencyByProfileId(userId);
+          return agency != null;
+        case 'landlord':
+          final landlord = await getLandlordByProfileId(userId);
+          return landlord != null;
+        case 'user':
+          return true;
+        default:
+          return false;
+      }
+    } catch (e) {
+      print('Error checking role registration: $e');
+      return false;
+    }
   }
 
-  // Conversation methods
-  Future<List<Conversation>> getUserConversations(String userId) async {
-    final response = await client
-        .from('conversations')
-        .select()
-        .or('initiator_id.eq.$userId,receiver_id.eq.$userId')
-        .order('updated_at', ascending: false);
-    return response.map((data) => Conversation.fromJson(data)).toList();
-  }
+  Future<String> getDashboardRoute(String userId) async {
+    try {
+      final userType = await getUserType(userId);
+      if (userType == null) return '/role_selection';
 
-  // Message methods
-  Future<List<Message>> getConversationMessages(String conversationId) async {
-    final response = await client
-        .from('messages')
-        .select()
-        .eq('conversation_id', conversationId)
-        .order('created_at', ascending: true);
-    return response.map((data) => Message.fromJson(data)).toList();
-  }
-
-  Future<void> sendMessage({
-    required String conversationId,
-    required String senderId,
-    required String content,
-  }) async {
-    await client.from('messages').insert({
-      'conversation_id': conversationId,
-      'sender_id': senderId,
-      'content': content,
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  // Notification methods
-  Future<List<app_notification.Notification>> getUserNotifications(String userId) async {
-    final response = await client
-        .from('notifications')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    return response.map((data) => app_notification.Notification.fromJson(data)).toList();
-  }
-
-  Future<void> markNotificationAsRead(String notificationId) async {
-    await client
-        .from('notifications')
-        .update({'is_read': true})
-        .eq('id', notificationId);
-  }
-
-  // Transaction methods
-  Future<List<Transaction>> getUserTransactions(String userId) async {
-    final response = await client
-        .from('transactions')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    return response.map((data) => Transaction.fromJson(data)).toList();
-  }
-
-  // Subscription methods
-  Future<List<Subscription>> getAgencySubscriptions(String agencyId) async {
-    final response = await client
-        .from('subscriptions')
-        .select()
-        .eq('agency_id', agencyId)
-        .order('created_at', ascending: false);
-    return response.map((data) => Subscription.fromJson(data)).toList();
-  }
-
-  // Property View methods
-  Future<List<PropertyView>> getPropertyViews(String propertyId) async {
-    final response = await client
-        .from('property_views')
-        .select()
-        .eq('property_id', propertyId)
-        .order('viewed_at', ascending: false);
-    return response.map((data) => PropertyView.fromJson(data)).toList();
-  }
-
-  Future<void> recordPropertyView({
-    required String propertyId,
-    required String userId,
-  }) async {
-    await client.from('property_views').insert({
-      'property_id': propertyId,
-      'user_id': userId,
-      'viewed_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  // Report methods
-  Future<List<Report>> getUserReports(String userId) async {
-    final response = await client
-        .from('reports')
-        .select()
-        .eq('reporter_id', userId)
-        .order('created_at', ascending: false);
-    return response.map((data) => Report.fromJson(data)).toList();
-  }
-
-  Future<void> createReport({
-    required String reporterId,
-    required String reportedId,
-    required String reportType,
-    required String reason,
-    String? description,
-  }) async {
-    await client.from('reports').insert({
-      'reporter_id': reporterId,
-      'reported_id': reportedId,
-      'report_type': reportType,
-      'reason': reason,
-      'description': description,
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  // Support Ticket methods
-  Future<List<SupportTicket>> getUserSupportTickets(String userId) async {
-    final response = await client
-        .from('support_tickets')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    return response.map((data) => SupportTicket.fromJson(data)).toList();
-  }
-
-  Future<void> createSupportTicket({
-    required String userId,
-    required String subject,
-    required String description,
-    required String category,
-  }) async {
-    await client.from('support_tickets').insert({
-      'user_id': userId,
-      'subject': subject,
-      'description': description,
-      'category': category,
-      'status': 'open',
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  // Saved Search methods
-  Future<List<SavedSearch>> getUserSavedSearches(String userId) async {
-    final response = await client
-        .from('saved_searches')
-        .select()
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-    return response.map((data) => SavedSearch.fromJson(data)).toList();
-  }
-
-  Future<void> createSavedSearch({
-    required String userId,
-    required String searchName,
-    required Map<String, dynamic> searchCriteria,
-  }) async {
-    await client.from('saved_searches').insert({
-      'user_id': userId,
-      'search_name': searchName,
-      'search_criteria': searchCriteria,
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-  Future<void> deleteSavedSearch(String searchId) async {
-    await client
-        .from('saved_searches')
-        .delete()
-        .eq('id', searchId);
+      final hasCompleted = await hasCompletedRoleRegistration(userId, userType);
+      
+      switch (userType.toLowerCase()) {
+        case 'user':
+          return '/user_home';
+        case 'agent':
+          return hasCompleted ? '/agent_dashboard' : '/agent_registration';
+        case 'agency':
+          return hasCompleted ? '/agency_dashboard' : '/agency_registration';
+        case 'landlord':
+          return hasCompleted ? '/landlord_dashboard' : '/landlord_registration';
+        default:
+          return '/role_selection';
+      }
+    } catch (e) {
+      print('Error getting dashboard route: $e');
+      return '/role_selection';
+    }
   }
 }

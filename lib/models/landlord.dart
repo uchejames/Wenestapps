@@ -1,22 +1,28 @@
 class Landlord {
   final String id;
-  final String userId;
+  final String profileId;
   final String? companyName;
-  final String? rcNumber;
-  final String? taxId;
+  final String? email;
+  final String? phone;
   final bool verified;
-  final bool isActive;
+  final String? address;
+  final String? state;
+  final String? city;
+  final int? propertiesCount;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
   Landlord({
     required this.id,
-    required this.userId,
+    required this.profileId,
     this.companyName,
-    this.rcNumber,
-    this.taxId,
+    this.email,
+    this.phone,
     this.verified = false,
-    this.isActive = true,
+    this.address,
+    this.state,
+    this.city,
+    this.propertiesCount,
     required this.createdAt,
     this.updatedAt,
   });
@@ -24,15 +30,18 @@ class Landlord {
   factory Landlord.fromJson(Map<String, dynamic> json) {
     return Landlord(
       id: json['id'] as String,
-      userId: json['user_id'] as String,
+      profileId: json['profile_id'] as String,
       companyName: json['company_name'] as String?,
-      rcNumber: json['rc_number'] as String?,
-      taxId: json['tax_id'] as String?,
+      email: json['email'] as String?,
+      phone: json['phone'] as String?,
       verified: json['verified'] as bool? ?? false,
-      isActive: json['is_active'] as bool? ?? true,
+      address: json['address'] as String?,
+      state: json['state'] as String?,
+      city: json['city'] as String?,
+      propertiesCount: json['properties_count'] as int?,
       createdAt: DateTime.parse(json['created_at'] as String),
-      updatedAt: json['updated_at'] != null 
-          ? DateTime.parse(json['updated_at'] as String) 
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
           : null,
     );
   }
@@ -40,12 +49,15 @@ class Landlord {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'user_id': userId,
+      'profile_id': profileId,
       'company_name': companyName,
-      'rc_number': rcNumber,
-      'tax_id': taxId,
+      'email': email,
+      'phone': phone,
       'verified': verified,
-      'is_active': isActive,
+      'address': address,
+      'state': state,
+      'city': city,
+      'properties_count': propertiesCount,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
     };
