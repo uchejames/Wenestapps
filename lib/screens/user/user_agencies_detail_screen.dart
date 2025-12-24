@@ -36,27 +36,50 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final agencyId = ModalRoute.of(context)!.settings.arguments as int;
-    _loadAgencyData(agencyId);
+    final agencyId = ModalRoute.of(context)!.settings.arguments;
+    print('Agency ID from route: $agencyId (${agencyId.runtimeType})');
+    
+    if (agencyId is int) {
+      _loadAgencyData(agencyId.toString());
+    } else if (agencyId is String) {
+      _loadAgencyData(agencyId);
+    } else {
+      print('⚠️ Invalid agency ID type: ${agencyId.runtimeType}');
+    }
   }
 
-  Future<void> _loadAgencyData(int agencyId) async {
+  Future<void> _loadAgencyData(String agencyId) async {
+    print('=== Loading agency data for ID: $agencyId ===');
+    
     setState(() {
       _isLoading = true;
     });
 
     try {
-      final agency = await _supabaseService.getAgencyById(agencyId.toString());
+      final agency = await _supabaseService.getAgencyById(agencyId);
+      
+      if (agency == null) {
+        print('⚠️ Agency not found for ID: $agencyId');
+      } else {
+        print('✓ Agency loaded: ${agency.name}');
+      }
+      
       setState(() {
         _agency = agency;
         _isLoading = false;
       });
       
-      _loadAgencyProperties(agencyId);
-    } catch (e) {
+      if (agency != null) {
+        _loadAgencyProperties(agencyId);
+      }
+    } catch (e, stackTrace) {
+      print('❌ Error loading agency: $e');
+      print('Stack trace: $stackTrace');
+      
       setState(() {
         _isLoading = false;
       });
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -70,19 +93,26 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
     }
   }
 
-  Future<void> _loadAgencyProperties(int agencyId) async {
+  Future<void> _loadAgencyProperties(String agencyId) async {
+    print('Loading properties for agency: $agencyId');
+    
     setState(() {
       _isLoadingProperties = true;
     });
 
     try {
+      // Load all properties for now
+      // TODO: Filter by agency_id when that field is available
       final properties = await _supabaseService.getProperties(limit: 20);
+      
+      print('✓ Loaded ${properties.length} properties');
       
       setState(() {
         _agencyProperties = properties;
         _isLoadingProperties = false;
       });
     } catch (e) {
+      print('Error loading properties: $e');
       setState(() {
         _isLoadingProperties = false;
       });
@@ -392,8 +422,8 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                           ),
                         if (_agency!.state != null)
                           Text(
-                            _agency!.lga != null 
-                                ? '${_agency!.lga}, ${_agency!.state}'
+                            _agency!.city != null 
+                                ? '${_agency!.city}, ${_agency!.state}'
                                 : _agency!.state!,
                             style: TextStyle(
                               color: Colors.grey.shade700,
