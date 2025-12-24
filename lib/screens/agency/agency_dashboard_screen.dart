@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
+import 'package:wenest/models/agency.dart';
+import 'package:wenest/models/property.dart';
+import 'package:shimmer/shimmer.dart';
+import 'package:wenest/screens/shared/help_support_screen.dart';
+import 'package:wenest/screens/agency/add_property_screen.dart';
+import 'package:wenest/screens/agency/my_properties_screen.dart';
+import 'package:wenest/screens/agency/manage_agents_screen.dart';
+import 'package:wenest/screens/agency/analytics_screen.dart';
+import 'package:wenest/screens/agency/agency_profile_screen.dart';
+import 'package:wenest/screens/agency/subscription_screen.dart';
 
 class AgencyDashboardScreen extends StatefulWidget {
   const AgencyDashboardScreen({super.key});
@@ -10,31 +20,44 @@ class AgencyDashboardScreen extends StatefulWidget {
 }
 
 class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
+  final _supabaseService = SupabaseService();
   int _selectedIndex = 0;
-  bool _isLoading = false;
+  Agency? _agency;
+  bool _isLoadingAgency = true;
 
-  Future<void> _refreshDashboard() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    // Simulate network request
-    await Future.delayed(const Duration(seconds: 2));
-
-    setState(() {
-      _isLoading = false;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _loadAgencyData();
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
+  Future<void> _loadAgencyData() async {
+    setState(() => _isLoadingAgency = true);
+    try {
+      final user = _supabaseService.getCurrentUser();
+      if (user != null) {
+        final agency = await _supabaseService.getAgencyByProfileId(user.id);
+        setState(() {
+          _agency = agency;
+          _isLoadingAgency = false;
+        });
+      }
+    } catch (e) {
+      setState(() => _isLoadingAgency = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading agency data: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _handleSignOut() async {
     try {
-      await SupabaseService().signOut();
+      await _supabaseService.signOut();
       if (mounted) {
         Navigator.pushReplacementNamed(context, AppRoutes.login);
       }
@@ -54,336 +77,302 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Agency Dashboard'),
+        title: Text(_isLoadingAgency ? 'Loading...' : _agency?.name ?? 'Agency Dashboard'),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
         actions: [
-          PopupMenuButton(
+          IconButton(
+            icon: const Icon(Icons.notifications_rounded),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.notifications),
+          ),
+          PopupMenuButton<int>(
             icon: const Icon(Icons.more_vert),
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                onTap: _handleSignOut,
-                child: const Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 10),
-                    Text('Sign Out'),
-                  ],
+            itemBuilder: (context) => <PopupMenuEntry<int>>[
+              PopupMenuItem<int>(
+                child: ListTile(
+                  leading: const Icon(Icons.account_circle, size: 20),
+                  title: const Text('Agency Profile'),
+                  contentPadding: EdgeInsets.zero,
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _selectedIndex = 5);
+                  },
+                ),
+              ),
+              PopupMenuItem<int>(
+                child: ListTile(
+                  leading: const Icon(Icons.subscriptions, size: 20),
+                  title: const Text('Subscription'),
+                  contentPadding: EdgeInsets.zero,
+                  onTap: () {
+                    Navigator.pop(context);
+                    setState(() => _selectedIndex = 6);
+                  },
+                ),
+              ),
+              PopupMenuItem<int>(
+                child: ListTile(
+                  leading: const Icon(Icons.settings, size: 20),
+                  title: const Text('Settings'),
+                  contentPadding: EdgeInsets.zero,
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, AppRoutes.settings);
+                  },
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem<int>(
+                onTap: () => _handleSignOut(),
+                child: const ListTile(
+                  leading: Icon(Icons.logout, color: Colors.red, size: 20),
+                  title: Text('Sign Out', style: TextStyle(color: Colors.red)),
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
             ],
           ),
         ],
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.white,
-                    child: Icon(
-                      Icons.business,
-                      size: 30,
-                      color: AppColors.primaryColor,
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  Text(
-                    'Premium Estates Ltd',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 5),
-                  Text(
-                    'Agency Account',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
+      drawer: _buildDrawer(),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildDrawer() {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: [
+          DrawerHeader(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [AppColors.primaryColor, AppColors.lightTeal],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
             ),
-            ListTile(
-              leading: const Icon(Icons.dashboard),
-              title: const Text('Dashboard'),
-              selected: _selectedIndex == 0,
-              onTap: () {
-                setState(() {
-                  _selectedIndex = 0;
-                });
-                Navigator.pop(context);
-              },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                  child: _agency?.logoUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.network(_agency!.logoUrl!, fit: BoxFit.cover),
+                        )
+                      : const Icon(Icons.business, size: 30, color: AppColors.primaryColor),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  _agency?.name ?? 'Agency',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const Text(
+                      'Agency Account',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    if (_agency?.verified == true) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.verified, color: Colors.white, size: 12),
+                            SizedBox(width: 4),
+                            Text('Verified', style: TextStyle(color: Colors.white, fontSize: 10)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
             ),
-            ListTile(
-              leading: const Icon(Icons.add_business),
-              title: const Text('Add Property'),
-              selected: _selectedIndex == 1,
-              onTap: () {
-                setState(() {
-                  _selectedIndex = 1;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.house),
-              title: const Text('My Properties'),
-              selected: _selectedIndex == 2,
-              onTap: () {
-                setState(() {
-                  _selectedIndex = 2;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.message),
-              title: const Text('Messages'),
-              selected: _selectedIndex == 3,
-              onTap: () {
-                setState(() {
-                  _selectedIndex = 3;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.analytics),
-              title: const Text('Analytics'),
-              selected: _selectedIndex == 4,
-              onTap: () {
-                setState(() {
-                  _selectedIndex = 4;
-                });
-                Navigator.pop(context);
-              },
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.account_circle),
-              title: const Text('Agency Profile'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.subscriptions),
-              title: const Text('Subscription'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              onTap: () {
-                Navigator.pop(context);
-              },
-            ),
-          ],
-        ),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshDashboard,
-        child: _buildDashboardContent(),
+          ),
+          _buildDrawerItem(0, Icons.dashboard_rounded, 'Dashboard'),
+          _buildDrawerItem(1, Icons.add_business_rounded, 'Add Property'),
+          _buildDrawerItem(2, Icons.house_rounded, 'My Properties'),
+          _buildDrawerItem(3, Icons.people_rounded, 'Manage Agents'),
+          _buildDrawerItem(4, Icons.analytics_rounded, 'Analytics'),
+          const Divider(),
+          _buildDrawerItem(5, Icons.account_circle_rounded, 'Agency Profile'),
+          _buildDrawerItem(6, Icons.subscriptions_rounded, 'Subscription'),
+          _buildDrawerItem(7, Icons.help_rounded, 'Help & Support'),
+        ],
       ),
     );
   }
 
-  Widget _buildDashboardContent() {
+  Widget _buildDrawerItem(int index, IconData icon, String title) {
+    final isSelected = _selectedIndex == index;
+    return ListTile(
+      leading: Icon(icon, color: isSelected ? AppColors.primaryColor : Colors.grey),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          color: isSelected ? AppColors.primaryColor : AppColors.textColor,
+        ),
+      ),
+      selected: isSelected,
+      selectedTileColor: AppColors.primaryColor.withValues(alpha: 0.1),
+      onTap: () {
+        Navigator.pop(context);
+        setState(() => _selectedIndex = index);
+      },
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoadingAgency) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_agency == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 60, color: Colors.grey),
+            const SizedBox(height: 16),
+            const Text('Agency not found', style: TextStyle(fontSize: 18)),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _loadAgencyData,
+              child: const Text('Retry'),
+            ),
+          ],
+        ),
+      );
+    }
+
     switch (_selectedIndex) {
       case 0:
-        return const AgencyDashboardOverview();
+        return AgencyDashboardOverview(agency: _agency!);
       case 1:
-        return const AddPropertyScreen();
+        return AddPropertyScreen(agency: _agency!);
       case 2:
-        return const MyPropertiesScreen();
+        return MyPropertiesScreen(agency: _agency!);
       case 3:
-        return const AgencyMessagesScreen();
+        return ManageAgentsScreen(agency: _agency!);
       case 4:
-        return const AnalyticsScreen();
+        return AnalyticsScreen(agency: _agency!);
+      case 5:
+        return AgencyProfileScreen(agency: _agency!, onUpdate: _loadAgencyData);
+      case 6:
+        return SubscriptionScreen(agency: _agency!);
+      case 7:
+        return const HelpSupportScreen();
       default:
-        return const AgencyDashboardOverview();
+        return AgencyDashboardOverview(agency: _agency!);
     }
   }
 }
 
 class AgencyDashboardOverview extends StatefulWidget {
-  const AgencyDashboardOverview({super.key});
+  final Agency agency;
+
+  const AgencyDashboardOverview({super.key, required this.agency});
 
   @override
-  State<AgencyDashboardOverview> createState() =>
-      _AgencyDashboardOverviewState();
+  State<AgencyDashboardOverview> createState() => _AgencyDashboardOverviewState();
 }
 
 class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
-  bool _isLoading = false;
+  final _supabaseService = SupabaseService();
+  List<Property> _recentProperties = [];
+  Map<String, dynamic> _stats = {};
+  bool _isLoading = true;
 
-  Future<void> _refreshOverview() async {
-    setState(() {
-      _isLoading = true;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboardData();
+  }
 
-    // Simulate network request
-    await Future.delayed(const Duration(seconds: 2));
+  Future<void> _loadDashboardData() async {
+    setState(() => _isLoading = true);
+    try {
+      final properties = await _supabaseService.getProperties(
+        agencyId: widget.agency.id,
+        limit: 5,
+      );
 
-    setState(() {
-      _isLoading = false;
-    });
+      final allProperties = await _supabaseService.getProperties(
+        agencyId: widget.agency.id,
+        limit: 1000,
+      );
+
+      final activeProperties = allProperties.where((p) => p.status == 'active').length;
+      final totalViews = allProperties.fold<int>(0, (sum, p) => sum + p.viewsCount);
+      final totalInquiries = allProperties.fold<int>(0, (sum, p) => sum + p.inquiriesCount);
+
+      setState(() {
+        _recentProperties = properties;
+        _stats = {
+          'total': allProperties.length,
+          'active': activeProperties,
+          'views': totalViews,
+          'inquiries': totalInquiries,
+        };
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading data: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _refreshOverview,
+      onRefresh: _loadDashboardData,
+      color: AppColors.primaryColor,
       child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Welcome back, Premium Estates!',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 5),
-              const Text(
-                'Here\'s what\'s happening with your listings today.',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 20),
-              // Stats cards
-              Row(
-                children: [
-                  _buildStatCard('Total Properties', '24', Icons.house),
-                  const SizedBox(width: 16),
-                  _buildStatCard('Active Listings', '18', Icons.check_circle),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _buildStatCard('Views This Month', '1,248', Icons.visibility),
-                  const SizedBox(width: 16),
-                  _buildStatCard('Messages', '42', Icons.message),
-                ],
-              ),
-              const SizedBox(height: 30),
-              // Quick Actions
-              const Text(
-                'Quick Actions',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  _buildQuickActionCard(
-                    context,
-                    'Add New Property',
-                    Icons.add,
-                    AppColors.primaryColor,
-                  ),
-                  const SizedBox(width: 16),
-                  _buildQuickActionCard(
-                    context,
-                    'View Messages',
-                    Icons.message,
-                    AppColors.secondaryColor,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  _buildQuickActionCard(
-                    context,
-                    'View Analytics',
-                    Icons.analytics,
-                    AppColors.accentColor,
-                  ),
-                  const SizedBox(width: 16),
-                  _buildQuickActionCard(
-                    context,
-                    'Manage Properties',
-                    Icons.edit,
-                    Colors.grey,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 30),
-              // Recent Properties
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Recent Properties',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      // Navigate to all properties
-                    },
-                    child: const Text('View All'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                height: 200,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  children: [
-                    _buildPropertyCard(
-                      context,
-                      '3 Bedroom Apartment',
-                      'Lekki, Lagos',
-                      '₦8,000,000',
-                      '2 days ago',
-                    ),
-                    const SizedBox(width: 16),
-                    _buildPropertyCard(
-                      context,
-                      'Office Space',
-                      'Victoria Island, Lagos',
-                      '₦2,500,000/year',
-                      '1 week ago',
-                    ),
-                    const SizedBox(width: 16),
-                    _buildPropertyCard(
-                      context,
-                      'Duplex',
-                      'Ikoyi, Lagos',
-                      '₦15,000,000',
-                      '2 weeks ago',
-                    ),
-                  ],
-                ),
-              ),
+              _buildWelcomeCard(),
+              const SizedBox(height: 24),
+              _buildStatsGrid(),
+              const SizedBox(height: 32),
+              _buildQuickActions(),
+              const SizedBox(height: 32),
+              _buildRecentProperties(),
             ],
           ),
         ),
@@ -391,186 +380,368 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon) {
-    return Expanded(
-      child: Card(
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
+  Widget _buildWelcomeCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryColor, AppColors.lightTeal],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryColor.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Welcome back! 👋',
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            widget.agency.name,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "Here's what's happening with your properties today",
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsGrid() {
+    if (_isLoading) {
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1.4,
+        children: List.generate(4, (i) => _buildShimmerCard()),
+      );
+    }
+
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: 1.4,
+      children: [
+        _buildStatCard('Total Properties', '${_stats['total']}', Icons.house_rounded, AppColors.primaryColor),
+        _buildStatCard('Active Listings', '${_stats['active']}', Icons.check_circle_rounded, Colors.green),
+        _buildStatCard('Total Views', '${_stats['views']}', Icons.visibility_rounded, Colors.blue),
+        _buildStatCard('Inquiries', '${_stats['inquiries']}', Icons.message_rounded, Colors.orange),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 22),
+          ),
+          const SizedBox(height: 8),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: AppColors.primaryColor),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 5),
               Text(
                 value,
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                title,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildQuickActionCard(
-    BuildContext context,
-    String title,
-    IconData icon,
-    Color color,
-  ) {
-    return Expanded(
-      child: Card(
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(25),
-                ),
-                child: Icon(
-                  icon,
+  Widget _buildQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Quick Actions',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 2.2,
+          children: [
+            _buildActionButton('Add Property', Icons.add_rounded, AppColors.primaryColor, () {
+              // Navigate to Add Property by changing the selected index in parent
+              final dashboardState = context.findAncestorStateOfType<_AgencyDashboardScreenState>();
+              if (dashboardState != null) {
+                dashboardState.setState(() => dashboardState._selectedIndex = 1);
+              }
+            }),
+            _buildActionButton('View Messages', Icons.message_rounded, AppColors.secondaryColor, () {
+              // Navigate to messages
+            }),
+            _buildActionButton('Analytics', Icons.analytics_rounded, AppColors.accentColor, () {
+              // Navigate to Analytics by changing the selected index in parent
+              final dashboardState = context.findAncestorStateOfType<_AgencyDashboardScreenState>();
+              if (dashboardState != null) {
+                dashboardState.setState(() => dashboardState._selectedIndex = 4);
+              }
+            }),
+            _buildActionButton('Manage Agents', Icons.people_rounded, Colors.grey.shade700, () {
+              // Navigate to Manage Agents by changing the selected index in parent
+              final dashboardState = context.findAncestorStateOfType<_AgencyDashboardScreenState>();
+              if (dashboardState != null) {
+                dashboardState.setState(() => dashboardState._selectedIndex = 3);
+              }
+            }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(String label, IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
                   color: color,
-                  size: 30,
+                  fontSize: 13,
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildPropertyCard(
-    BuildContext context,
-    String title,
-    String location,
-    String price,
-    String date,
-  ) {
-    return Card(
-      child: SizedBox(
-        width: 250,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildRecentProperties() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Recent Properties',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            TextButton(
+              onPressed: () {
+                // Navigate to My Properties by changing the selected index in parent
+                final dashboardState = context.findAncestorStateOfType<_AgencyDashboardScreenState>();
+                if (dashboardState != null) {
+                  dashboardState.setState(() => dashboardState._selectedIndex = 2);
+                }
+              },
+              child: const Text('View All'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_isLoading)
+          Column(
+            children: List.generate(3, (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildShimmerCard(),
+            )),
+          )
+        else if (_recentProperties.isEmpty)
+          _buildEmptyState()
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _recentProperties.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildPropertyCard(_recentProperties[index]),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPropertyCard(Property property) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              color: AppColors.backgroundColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.home_rounded, color: AppColors.primaryColor, size: 30),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  property.title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  property.locationDisplay,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: property.status == 'active'
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        property.status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: property.status == 'active' ? Colors.green : Colors.grey,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.visibility_rounded, size: 14, color: Colors.grey.shade500),
+                    const SizedBox(width: 4),
+                    Text('${property.viewsCount}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                height: 100,
-                decoration: BoxDecoration(
-                  color: AppColors.backgroundColor,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Icon(
-                  Icons.house,
-                  size: 40,
+              Text(
+                property.formattedPrice,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                   color: AppColors.primaryColor,
                 ),
               ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                location,
-                style: const TextStyle(
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                price,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                date,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
-              ),
+              const SizedBox(height: 8),
+              Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey.shade400),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.home_work_outlined, size: 60, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            Text('No properties yet', style: TextStyle(color: Colors.grey.shade500)),
+          ],
         ),
       ),
     );
   }
-}
 
-class AddPropertyScreen extends StatelessWidget {
-  const AddPropertyScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Add Property Screen'),
-    );
-  }
-}
-
-class MyPropertiesScreen extends StatelessWidget {
-  const MyPropertiesScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('My Properties Screen'),
-    );
-  }
-}
-
-class AgencyMessagesScreen extends StatelessWidget {
-  const AgencyMessagesScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Agency Messages Screen'),
-    );
-  }
-}
-
-class AnalyticsScreen extends StatelessWidget {
-  const AnalyticsScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text('Analytics Screen'),
+  Widget _buildShimmerCard() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade200,
+      highlightColor: Colors.grey.shade50,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
     );
   }
 }

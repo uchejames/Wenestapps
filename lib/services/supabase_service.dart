@@ -132,46 +132,6 @@ class SupabaseService {
 
   // ============ PROPERTY METHODS ============
   
-  Future<List<Property>> getProperties({
-    String? propertyType,
-    String? listingType,
-    String? state,
-    String? cityArea,
-    double? minPrice,
-    double? maxPrice,
-    int? minBedrooms,
-    int? maxBedrooms,
-    bool? isFeatured,
-    String? status = 'active',
-    int limit = 50,
-  }) async {
-    try {
-      var query = client
-          .from('properties')
-          .select()
-          .eq('is_approved', true);
-      
-      if (status != null) query = query.eq('status', status);
-      if (propertyType != null) query = query.eq('property_type', propertyType);
-      if (listingType != null) query = query.eq('listing_type', listingType);
-      if (state != null) query = query.eq('state', state);
-      if (cityArea != null) query = query.eq('city_area', cityArea);
-      if (minPrice != null) query = query.gte('price', minPrice);
-      if (maxPrice != null) query = query.lte('price', maxPrice);
-      if (minBedrooms != null) query = query.gte('bedrooms', minBedrooms);
-      if (maxBedrooms != null) query = query.lte('bedrooms', maxBedrooms);
-      if (isFeatured != null) query = query.eq('is_featured', isFeatured);
-      
-      final response = await query
-          .order('published_at', ascending: false)
-          .limit(limit);
-      
-      return (response as List).map((data) => Property.fromJson(data)).toList();
-    } catch (e) {
-      print('Error getting properties: $e');
-      return [];
-    }
-  }
 
   Future<Property?> getPropertyById(String id) async {
     try {
@@ -203,7 +163,7 @@ class SupabaseService {
   
   Future<List<Agency>> getAgencies({bool? verified, int limit = 50}) async {
     try {
-      var query = client.from('agency').select();
+      dynamic query = client.from('agency').select();
       
       if (verified != null) {
         query = query.eq('verified', verified);
@@ -318,7 +278,7 @@ class SupabaseService {
   
   Future<List<Agent>> getAgents({bool? verified, String? agencyId}) async {
     try {
-      var query = client.from('agents_with_agency').select();
+      dynamic query = client.from('agents_with_agency').select();
       
       if (verified != null) {
         query = query.eq('verified', verified);
@@ -433,7 +393,7 @@ class SupabaseService {
   
   Future<List<Landlord>> getLandlords({bool? verified}) async {
     try {
-      var query = client.from('landlords').select();
+      dynamic query = client.from('landlords').select();
       
       if (verified != null) {
         query = query.eq('verified', verified);
@@ -472,6 +432,346 @@ class SupabaseService {
     } catch (e) {
       print('Error getting landlord by profile: $e');
       return null;
+    }
+  }
+
+  // ============ ENHANCED PROPERTY METHODS FOR AGENCIES ============
+
+  Future<List<Property>> getProperties({
+    String? propertyType,
+    String? listingType,
+    String? state,
+    String? cityArea,
+    double? minPrice,
+    double? maxPrice,
+    int? minBedrooms,
+    int? maxBedrooms,
+    bool? isFeatured,
+    String? status = 'active',
+    String? agencyId,  // NEW: Filter by agency
+    String? agentId,   // NEW: Filter by agent
+    String? landlordId, // NEW: Filter by landlord
+    int limit = 50,
+  }) async {
+    try {
+      dynamic query = client
+          .from('properties')
+          .select()
+          .eq('is_approved', true);
+      
+      if (status != null) query = query.eq('status', status);
+      if (propertyType != null) query = query.eq('property_type', propertyType);
+      if (listingType != null) query = query.eq('listing_type', listingType);
+      if (state != null) query = query.eq('state', state);
+      if (cityArea != null) query = query.eq('city_area', cityArea);
+      if (minPrice != null) query = query.gte('price', minPrice);
+      if (maxPrice != null) query = query.lte('price', maxPrice);
+      if (minBedrooms != null) query = query.gte('bedrooms', minBedrooms);
+      if (maxBedrooms != null) query = query.lte('bedrooms', maxBedrooms);
+      if (isFeatured != null) query = query.eq('is_featured', isFeatured);
+      
+      // NEW: Agency/Agent/Landlord filters
+      if (agencyId != null) query = query.eq('agency_id', agencyId);
+      if (agentId != null) query = query.eq('agent_id', agentId);
+      if (landlordId != null) query = query.eq('landlord_id', landlordId);
+      
+      final response = await query
+          .order('published_at', ascending: false)
+          .limit(limit);
+      
+      return (response as List).map((data) => Property.fromJson(data)).toList();
+    } catch (e) {
+      print('Error getting properties: $e');
+      return [];
+    }
+  }
+
+  // NEW: Get property count for agency
+  Future<int> getAgencyPropertyCount(String agencyId, {String? status}) async {
+    try {
+      final props = await getProperties(agencyId: agencyId, status: status, limit: 1000);
+      return props.length;
+    } catch (e) {
+      print('Error getting property count: $e');
+      return 0;
+    }
+  }
+
+  // NEW: Get agency statistics
+  Future<Map<String, dynamic>> getAgencyStats(String agencyId) async {
+    try {
+      final properties = await getProperties(agencyId: agencyId, limit: 1000);
+      
+      final totalProperties = properties.length;
+      final activeProperties = properties.where((p) => p.status == 'active').length;
+      final soldProperties = properties.where((p) => p.status == 'sold').length;
+      final rentedProperties = properties.where((p) => p.status == 'rented').length;
+      final totalViews = properties.fold<int>(0, (sum, p) => sum + p.viewsCount);
+      final totalSaves = properties.fold<int>(0, (sum, p) => sum + p.savesCount);
+      final totalInquiries = properties.fold<int>(0, (sum, p) => sum + p.inquiriesCount);
+      
+      return {
+        'total_properties': totalProperties,
+        'active_properties': activeProperties,
+        'sold_properties': soldProperties,
+        'rented_properties': rentedProperties,
+        'total_views': totalViews,
+        'total_saves': totalSaves,
+        'total_inquiries': totalInquiries,
+        'average_views_per_property': totalProperties > 0 ? totalViews / totalProperties : 0,
+      };
+    } catch (e) {
+      print('Error getting agency stats: $e');
+      return {};
+    }
+  }
+
+  // NEW: Create property
+  Future<String> createProperty({
+    required String title,
+    required String description,
+    required String propertyType,
+    required String listingType,
+    required double price,
+    required String address,
+    required String cityArea,
+    required String state,
+    String? agencyId,
+    String? agentId,
+    String? landlordId,
+    int? bedrooms,
+    int? bathrooms,
+    int? toilets,
+    double? squareMeters,
+    int? yearBuilt,
+    String? furnishingStatus,
+    int? parkingSpaces,
+    String currency = 'NGN',
+    bool negotiable = false,
+    String country = 'Nigeria',
+    double? latitude,
+    double? longitude,
+  }) async {
+    try {
+      final response = await client.from('properties').insert({
+        'title': title,
+        'description': description,
+        'property_type': propertyType,
+        'listing_type': listingType,
+        'price': price,
+        'address': address,
+        'city_area': cityArea,
+        'state': state,
+        'country': country,
+        'currency': currency,
+        'negotiable': negotiable,
+        'agency_id': agencyId,
+        'agent_id': agentId,
+        'landlord_id': landlordId,
+        'bedrooms': bedrooms,
+        'bathrooms': bathrooms,
+        'toilets': toilets,
+        'square_meters': squareMeters,
+        'year_built': yearBuilt,
+        'furnishing_status': furnishingStatus,
+        'parking_spaces': parkingSpaces,
+        'latitude': latitude,
+        'longitude': longitude,
+        'status': 'draft',
+        'is_approved': false,
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).select().single();
+      
+      return response['id'].toString();
+    } catch (e) {
+      print('Error creating property: $e');
+      rethrow;
+    }
+  }
+
+  // NEW: Update property
+  Future<void> updateProperty({
+    required String propertyId,
+    String? title,
+    String? description,
+    String? propertyType,
+    String? listingType,
+    double? price,
+    String? address,
+    String? cityArea,
+    String? state,
+    int? bedrooms,
+    int? bathrooms,
+    int? toilets,
+    double? squareMeters,
+    int? yearBuilt,
+    String? furnishingStatus,
+    int? parkingSpaces,
+    bool? negotiable,
+    String? status,
+  }) async {
+    try {
+      final Map<String, dynamic> updates = {
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (title != null) updates['title'] = title;
+      if (description != null) updates['description'] = description;
+      if (propertyType != null) updates['property_type'] = propertyType;
+      if (listingType != null) updates['listing_type'] = listingType;
+      if (price != null) updates['price'] = price;
+      if (address != null) updates['address'] = address;
+      if (cityArea != null) updates['city_area'] = cityArea;
+      if (state != null) updates['state'] = state;
+      if (bedrooms != null) updates['bedrooms'] = bedrooms;
+      if (bathrooms != null) updates['bathrooms'] = bathrooms;
+      if (toilets != null) updates['toilets'] = toilets;
+      if (squareMeters != null) updates['square_meters'] = squareMeters;
+      if (yearBuilt != null) updates['year_built'] = yearBuilt;
+      if (furnishingStatus != null) updates['furnishing_status'] = furnishingStatus;
+      if (parkingSpaces != null) updates['parking_spaces'] = parkingSpaces;
+      if (negotiable != null) updates['negotiable'] = negotiable;
+      if (status != null) updates['status'] = status;
+
+      await client.from('properties').update(updates).eq('id', propertyId);
+    } catch (e) {
+      print('Error updating property: $e');
+      rethrow;
+    }
+  }
+
+  // NEW: Delete property
+  Future<void> deleteProperty(String propertyId) async {
+    try {
+      await client.from('properties').delete().eq('id', propertyId);
+    } catch (e) {
+      print('Error deleting property: $e');
+      rethrow;
+    }
+  }
+
+  // NEW: Publish property
+  Future<void> publishProperty(String propertyId) async {
+    try {
+      await client.from('properties').update({
+        'status': 'active',
+        'published_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', propertyId);
+    } catch (e) {
+      print('Error publishing property: $e');
+      rethrow;
+    }
+  }
+
+  // ============ AGENT MANAGEMENT FOR AGENCIES ============
+
+  // NEW: Get agents for specific agency
+  Future<List<Agent>> getAgencyAgents(String agencyId) async {
+    try {
+      final response = await client
+          .from('agents_with_agency')
+          .select()
+          .eq('agency_id', agencyId)
+          .eq('is_active', true)
+          .order('created_at', ascending: false);
+      
+      return (response as List).map((data) => Agent.fromJson(data)).toList();
+    } catch (e) {
+      print('Error getting agency agents: $e');
+      return [];
+    }
+  }
+
+  // NEW: Invite agent to agency
+  Future<void> inviteAgentToAgency(String agentId, String agencyId) async {
+    try {
+      await client.from('agents').update({
+        'agency_id': agencyId,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', agentId);
+    } catch (e) {
+      print('Error inviting agent: $e');
+      rethrow;
+    }
+  }
+
+  // NEW: Remove agent from agency
+  Future<void> removeAgentFromAgency(String agentId) async {
+    try {
+      await client.from('agents').update({
+        'agency_id': null,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('id', agentId);
+    } catch (e) {
+      print('Error removing agent: $e');
+      rethrow;
+    }
+  }
+
+  // ============ ANALYTICS METHODS ============
+
+  // NEW: Get property views over time (FIXED)
+  Future<List<Map<String, dynamic>>> getPropertyViewsAnalytics(
+    String agencyId,
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    try {
+      final response = await client
+          .from('property_views')
+          .select('viewed_at, property_id')
+          .gte('viewed_at', startDate.toIso8601String())
+          .lte('viewed_at', endDate.toIso8601String());
+      
+      // Group by date
+      final Map<String, int> viewsByDate = {};
+      for (var view in response as List) {
+        final date = DateTime.parse(view['viewed_at'] as String);
+        final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+        viewsByDate[dateKey] = (viewsByDate[dateKey] ?? 0) + 1;
+      }
+      
+      return viewsByDate.entries
+          .map((e) => {'date': e.key, 'views': e.value})
+          .toList();
+    } catch (e) {
+      print('Error getting views analytics: $e');
+      return [];
+    }
+  }
+
+  // NEW: Get top performing properties (FIXED)
+  Future<List<Property>> getTopPerformingProperties(
+    String agencyId, {
+    int limit = 10,
+    String sortBy = 'views', // views, saves, inquiries
+  }) async {
+    try {
+      // Determine the sort column
+      String sortColumn;
+      if (sortBy == 'saves') {
+        sortColumn = 'saves_count';
+      } else if (sortBy == 'inquiries') {
+        sortColumn = 'inquiries_count';
+      } else {
+        sortColumn = 'views_count';
+      }
+      
+      // Build and execute query in one chain
+      final response = await client
+          .from('properties')
+          .select()
+          .eq('agency_id', agencyId)
+          .eq('status', 'active')
+          .order(sortColumn, ascending: false)
+          .limit(limit);
+      
+      return (response as List).map((data) => Property.fromJson(data)).toList();
+    } catch (e) {
+      print('Error getting top properties: $e');
+      return [];
     }
   }
 
