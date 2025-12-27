@@ -2,6 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agent.dart';
+import 'package:wenest/models/property.dart';
+import 'package:shimmer/shimmer.dart';
+
+// Import agent screens
+import 'package:wenest/screens/agent/add_property_screen.dart';
+import 'package:wenest/screens/agent/my_properties_screen.dart';
+import 'package:wenest/screens/agent/my_clients_screen.dart';
+import 'package:wenest/screens/agent/agent_profile_screen.dart';
+import 'package:wenest/screens/agent/agent_performance_screen.dart';
+import 'package:wenest/screens/agent/join_agency_screen.dart';
 
 class AgentDashboardScreen extends StatefulWidget {
   const AgentDashboardScreen({super.key});
@@ -11,50 +21,85 @@ class AgentDashboardScreen extends StatefulWidget {
 }
 
 class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
+  final _supabaseService = SupabaseService();
   int _selectedIndex = 0;
-  Agent? _agentProfile;
+  Agent? _agent;
   bool _isLoading = true;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
     super.initState();
-    _loadAgentProfile();
+    _loadAgentData();
   }
 
-  Future<void> _loadAgentProfile() async {
+  Future<void> _loadAgentData() async {
     setState(() => _isLoading = true);
     try {
-      final user = SupabaseService().getCurrentUser();
+      final user = _supabaseService.getCurrentUser();
       if (user != null) {
-        final agent = await SupabaseService().getAgentByProfileId(user.id);
-        if (mounted) {
-          setState(() {
-            _agentProfile = agent;
-            _isLoading = false;
-          });
-        }
+        final agent = await _supabaseService.getAgentByProfileId(user.id);
+        setState(() {
+          _agent = agent;
+          _isLoading = false;
+        });
       }
     } catch (e) {
-      print('Error loading agent profile: $e');
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _handleSignOut() async {
-    try {
-      await SupabaseService().signOut();
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.login);
-      }
-    } catch (error) {
+      setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error signing out: ${error.toString()}'),
+            content: Text('Error loading agent data: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
+    }
+  }
+
+  Future<void> _handleSignOut() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Sign Out'),
+        content: const Text('Are you sure you want to sign out?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Sign Out'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _supabaseService.signOut();
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, AppRoutes.login);
+        }
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error signing out: ${error.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  void _onNavItemTapped(int index) {
+    setState(() => _selectedIndex = index);
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.pop(context);
     }
   }
 
@@ -66,298 +111,685 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
       );
     }
 
+    if (_agent == null) {
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 60, color: Colors.grey),
+              const SizedBox(height: 16),
+              const Text('Agent profile not found', style: TextStyle(fontSize: 18)),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: _loadAgentData,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
-        title: Text(_agentProfile?.isAffiliated == true 
-            ? 'Agent Dashboard' 
-            : 'Independent Agent'),
+        title: Text(_getAppBarTitle()),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
+        ),
         actions: [
-          PopupMenuButton(
-            icon: const Icon(Icons.more_vert),
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                onTap: _handleSignOut,
-                child: const Row(
-                  children: [
-                    Icon(Icons.logout, color: Colors.red),
-                    SizedBox(width: 10),
-                    Text('Sign Out'),
-                  ],
+          IconButton(
+            icon: const Icon(Icons.notifications_rounded),
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.notifications),
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded),
+            itemBuilder: (context) => <PopupMenuEntry<String>>[
+              PopupMenuItem<String>(
+                value: 'settings',
+                child: const ListTile(
+                  leading: Icon(Icons.settings_rounded, size: 20),
+                  title: Text('Settings'),
+                  contentPadding: EdgeInsets.zero,
                 ),
+                onTap: () {
+                  Future.delayed(Duration.zero, () {
+                    Navigator.pushNamed(context, AppRoutes.settings);
+                  });
+                },
+              ),
+              PopupMenuItem<String>(
+                value: 'help',
+                child: const ListTile(
+                  leading: Icon(Icons.help_rounded, size: 20),
+                  title: Text('Help & Support'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onTap: () {
+                  Future.delayed(Duration.zero, () {
+                    Navigator.pushNamed(context, AppRoutes.helpSupport);
+                  });
+                },
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem<String>(
+                value: 'signout',
+                child: const ListTile(
+                  leading: Icon(Icons.logout_rounded, color: Colors.red, size: 20),
+                  title: Text('Sign Out', style: TextStyle(color: Colors.red)),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onTap: () {
+                  Future.delayed(Duration.zero, () {
+                    _handleSignOut();
+                  });
+                },
               ),
             ],
           ),
         ],
       ),
       drawer: _buildDrawer(),
-      body: _buildDashboardContent(),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        selectedItemColor: AppColors.primaryColor,
-        unselectedItemColor: Colors.grey,
-        currentIndex: _selectedIndex,
-        onTap: (index) => setState(() => _selectedIndex = index),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.house),
-            label: 'Properties',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.people),
-            label: 'Clients',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-      ),
+      body: _buildBody(),
+      bottomNavigationBar: _buildBottomNavigationBar(),
     );
+  }
+
+  String _getAppBarTitle() {
+    switch (_selectedIndex) {
+      case 0:
+        return 'Dashboard';
+      case 1:
+        return 'My Properties';
+      case 2:
+        return 'Add Property';
+      case 3:
+        return 'My Clients';
+      case 4:
+        return 'My Profile';
+      default:
+        return 'Agent Dashboard';
+    }
   }
 
   Widget _buildDrawer() {
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
+      child: Column(
         children: [
-          DrawerHeader(
+          // Drawer Header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
             decoration: const BoxDecoration(
-              color: AppColors.primaryColor,
+              gradient: LinearGradient(
+                colors: [AppColors.primaryColor, AppColors.lightTeal],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.white,
-                  backgroundImage: _agentProfile?.avatarUrl != null
-                      ? NetworkImage(_agentProfile!.avatarUrl!)
-                      : null,
-                  child: _agentProfile?.avatarUrl == null
-                      ? const Icon(Icons.person, size: 30, color: AppColors.primaryColor)
-                      : null,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  _agentProfile?.displayTitle ?? 'Agent',
-                  style: const TextStyle(
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
                     color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                if (_agentProfile?.agencyName != null) ...[
-                  const SizedBox(height: 5),
-                  Row(
-                    children: [
-                      const Icon(Icons.business, size: 14, color: Colors.white70),
-                      const SizedBox(width: 5),
-                      Text(
-                        _agentProfile!.agencyName!,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 12,
                       ),
                     ],
                   ),
-                ] else ...[
-                  const SizedBox(height: 5),
-                  const Text(
-                    'Independent Agent',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                  child: _agent!.avatarUrl != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.network(_agent!.avatarUrl!, fit: BoxFit.cover),
+                        )
+                      : const Icon(Icons.person_rounded, size: 35, color: AppColors.primaryColor),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  _agent!.displayTitle,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    if (_agent!.verified)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.verified_rounded, color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Text('Verified', style: TextStyle(color: Colors.white, fontSize: 11)),
+                          ],
+                        ),
+                      ),
+                    if (_agent!.rating != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.25),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              _agent!.rating!.toStringAsFixed(1),
+                              style: const TextStyle(color: Colors.white, fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _agent!.isAffiliated && _agent!.agencyName != null
+                      ? _agent!.agencyName!
+                      : 'Independent Agent',
+                  style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),
-          ListTile(
-            leading: const Icon(Icons.dashboard),
-            title: const Text('Dashboard'),
-            selected: _selectedIndex == 0,
-            onTap: () {
-              setState(() => _selectedIndex = 0);
-              Navigator.pop(context);
-            },
+          // Drawer Menu Items
+          Expanded(
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                _buildDrawerItem(0, Icons.dashboard_rounded, 'Dashboard'),
+                _buildDrawerItem(1, Icons.house_rounded, 'My Properties'),
+                _buildDrawerItem(2, Icons.add_home_rounded, 'Add Property'),
+                _buildDrawerItem(3, Icons.people_rounded, 'My Clients'),
+                const Divider(height: 1),
+                _buildDrawerItem(4, Icons.person_rounded, 'My Profile'),
+                _buildDrawerItem(5, Icons.analytics_rounded, 'Performance'),
+                if (!_agent!.isAffiliated)
+                  _buildDrawerItem(6, Icons.business_rounded, 'Join Agency'),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.settings_rounded, color: Colors.grey),
+                  title: const Text('Settings'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, AppRoutes.settings);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.help_rounded, color: Colors.grey),
+                  title: const Text('Help & Support'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, AppRoutes.helpSupport);
+                  },
+                ),
+              ],
+            ),
           ),
-          ListTile(
-            leading: const Icon(Icons.house),
-            title: const Text('My Properties'),
-            selected: _selectedIndex == 1,
-            onTap: () {
-              setState(() => _selectedIndex = 1);
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.people),
-            title: const Text('Clients'),
-            selected: _selectedIndex == 2,
-            onTap: () {
-              setState(() => _selectedIndex = 2);
-              Navigator.pop(context);
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Settings'),
-            onTap: () {
-              Navigator.pop(context);
-            },
-          ),
-          if (_agentProfile?.isAffiliated == false) ...[
-            ListTile(
-              leading: const Icon(Icons.business),
-              title: const Text('Join Agency'),
+          // Sign Out Button
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(top: BorderSide(color: Colors.grey.shade200)),
+            ),
+            child: ListTile(
+              leading: const Icon(Icons.logout_rounded, color: Colors.red),
+              title: const Text('Sign Out', style: TextStyle(color: Colors.red)),
               onTap: () {
                 Navigator.pop(context);
-                // Navigate to agency search/join screen
+                _handleSignOut();
               },
             ),
-          ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDashboardContent() {
+  Widget _buildDrawerItem(int index, IconData icon, String title) {
+    final isSelected = _selectedIndex == index;
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isSelected ? AppColors.primaryColor : Colors.grey.shade600,
+      ),
+      title: Text(
+        title,
+        style: TextStyle(
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          color: isSelected ? AppColors.primaryColor : AppColors.textColor,
+        ),
+      ),
+      selected: isSelected,
+      selectedTileColor: AppColors.primaryColor.withValues(alpha: 0.1),
+      onTap: () => _onNavItemTapped(index),
+    );
+  }
+
+  Widget _buildBottomNavigationBar() {
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      backgroundColor: Colors.white,
+      selectedItemColor: AppColors.primaryColor,
+      unselectedItemColor: Colors.grey.shade600,
+      selectedFontSize: 12,
+      unselectedFontSize: 12,
+      currentIndex: _selectedIndex > 3 ? 0 : _selectedIndex,
+      onTap: (index) {
+        if (index == 2) {
+          // Navigate to Add Property screen
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddPropertyScreen(agent: _agent!),
+            ),
+          ).then((_) => _loadAgentData());
+        } else {
+          _onNavItemTapped(index);
+        }
+      },
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.dashboard_rounded),
+          label: 'Dashboard',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.house_rounded),
+          label: 'Properties',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.add_circle_rounded, size: 28),
+          label: 'Add',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.people_rounded),
+          label: 'Clients',
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
     switch (_selectedIndex) {
       case 0:
-        return _buildDashboardOverview();
+        return AgentDashboardOverview(agent: _agent!, onRefresh: _loadAgentData);
       case 1:
-        return const Center(child: Text('Properties Screen'));
+        return MyPropertiesScreen(agent: _agent!);
       case 2:
-        return const Center(child: Text('Clients Screen'));
+        return AddPropertyScreen(agent: _agent!);
       case 3:
-        return const Center(child: Text('Profile Screen'));
+        return MyClientsScreen(agent: _agent!);
+      case 4:
+        return AgentProfileScreen(agent: _agent!, onUpdate: _loadAgentData);
+      case 5:
+        return AgentPerformanceScreen(agent: _agent!);
+      case 6:
+        return const JoinAgencyScreen();
       default:
-        return _buildDashboardOverview();
+        return AgentDashboardOverview(agent: _agent!, onRefresh: _loadAgentData);
+    }
+  }
+}
+
+// ============ AGENT DASHBOARD OVERVIEW ============
+
+class AgentDashboardOverview extends StatefulWidget {
+  final Agent agent;
+  final VoidCallback onRefresh;
+
+  const AgentDashboardOverview({
+    super.key,
+    required this.agent,
+    required this.onRefresh,
+  });
+
+  @override
+  State<AgentDashboardOverview> createState() => _AgentDashboardOverviewState();
+}
+
+class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
+  final _supabaseService = SupabaseService();
+  List<Property> _recentProperties = [];
+  Map<String, dynamic> _stats = {};
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboardData();
+  }
+
+  Future<void> _loadDashboardData() async {
+    setState(() => _isLoading = true);
+    try {
+      final properties = await _supabaseService.getProperties(
+        agentId: widget.agent.id,
+        limit: 5,
+      );
+
+      final allProperties = await _supabaseService.getProperties(
+        agentId: widget.agent.id,
+        limit: 1000,
+      );
+
+      final activeProperties = allProperties.where((p) => p.status == 'active').length;
+      final totalViews = allProperties.fold<int>(0, (sum, p) => sum + p.viewsCount);
+      final totalInquiries = allProperties.fold<int>(0, (sum, p) => sum + p.inquiriesCount);
+
+      setState(() {
+        _recentProperties = properties;
+        _stats = {
+          'total': allProperties.length,
+          'active': activeProperties,
+          'views': totalViews,
+          'inquiries': totalInquiries,
+        };
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
     }
   }
 
-  Widget _buildDashboardOverview() {
+  @override
+  Widget build(BuildContext context) {
     return RefreshIndicator(
-      onRefresh: _loadAgentProfile,
+      onRefresh: () async {
+        await _loadDashboardData();
+        widget.onRefresh();
+      },
+      color: AppColors.primaryColor,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Welcome back, ${_agentProfile?.displayTitle ?? 'Agent'}!',
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.only(bottom: 24),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildWelcomeCard(),
+              const SizedBox(height: 24),
+              if (!widget.agent.verified) _buildVerificationAlert(),
+              if (!widget.agent.verified) const SizedBox(height: 24),
+              _buildStatsGrid(),
+              const SizedBox(height: 32),
+              _buildQuickActions(),
+              const SizedBox(height: 32),
+              _buildRecentProperties(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWelcomeCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryColor, AppColors.lightTeal],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryColor.withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Welcome back! 👋',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      widget.agent.displayTitle,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 5),
-            const Text(
-              'Here\'s your performance today.',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
-              ),
-            ),
-            const SizedBox(height: 20),
-            
-            // Stats cards
-            Row(
-              children: [
-                _buildStatCard('Properties', '${_agentProfile?.propertiesCount ?? 0}', Icons.house),
-                const SizedBox(width: 16),
-                _buildStatCard('Rating', '${_agentProfile?.rating?.toStringAsFixed(1) ?? 'N/A'}', Icons.star),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                _buildStatCard('Reviews', '${_agentProfile?.reviewsCount ?? 0}', Icons.rate_review),
-                const SizedBox(width: 16),
-                _buildStatCard('Experience', '${_agentProfile?.yearsOfExperience ?? 0} yrs', Icons.work),
-              ],
-            ),
-            
-            const SizedBox(height: 30),
-            
-            // Verification status
-            if (_agentProfile?.verified != true) ...[
-              Card(
-                color: Colors.orange.shade50,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
+              if (widget.agent.rating != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
                     children: [
-                      Icon(Icons.warning, color: Colors.orange.shade700),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Your account is pending verification. You\'ll be notified once it\'s approved.',
-                          style: TextStyle(fontSize: 14),
+                      const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
+                      const SizedBox(width: 6),
+                      Text(
+                        widget.agent.rating!.toStringAsFixed(1),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
             ],
-            
-            // Specializations
-            if (_agentProfile?.specialization != null && _agentProfile!.specialization!.isNotEmpty) ...[
-              const Text(
-                'Your Specializations',
+          ),
+          const SizedBox(height: 16),
+          Text(
+            "${widget.agent.yearsOfExperience} years experience • ${widget.agent.reviewsCount ?? 0} reviews",
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerificationAlert() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_rounded, color: Colors.orange.shade700, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Your account is pending verification. You\'ll be notified once approved.',
+              style: TextStyle(color: Colors.orange.shade900, fontSize: 14),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsGrid() {
+    if (_isLoading) {
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 16,
+        crossAxisSpacing: 16,
+        childAspectRatio: 1.5,
+        children: List.generate(4, (i) => _buildShimmerCard()),
+      );
+    }
+
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 16,
+      crossAxisSpacing: 16,
+      childAspectRatio: 1.5,
+      children: [
+        _buildStatCard('My Properties', '${_stats['total']}', Icons.house_rounded, AppColors.primaryColor),
+        _buildStatCard('Active Listings', '${_stats['active']}', Icons.check_circle_rounded, Colors.green),
+        _buildStatCard('Total Views', '${_stats['views']}', Icons.visibility_rounded, Colors.blue),
+        _buildStatCard('Inquiries', '${_stats['inquiries']}', Icons.message_rounded, Colors.orange),
+      ],
+    );
+  }
+
+  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                value,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickActions() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Quick Actions',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 16),
+        GridView.count(
+          crossAxisCount: 2,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 2.2,
+          children: [
+            _buildActionButton('Add Property', Icons.add_rounded, AppColors.primaryColor, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AddPropertyScreen(agent: widget.agent),
+                ),
+              );
+            }),
+            _buildActionButton('View Clients', Icons.people_rounded, AppColors.secondaryColor, () {
+              // Navigate to clients - handled by parent
+            }),
+            _buildActionButton('Performance', Icons.analytics_rounded, AppColors.accentColor, () {
+              // Navigate to performance - handled by parent
+            }),
+            _buildActionButton('Messages', Icons.message_rounded, Colors.grey.shade700, () {
+              Navigator.pushNamed(context, AppRoutes.userMessages);
+            }),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionButton(String label, IconData icon, Color color, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                  fontSize: 13,
                 ),
               ),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _agentProfile!.specialization!.map((spec) {
-                  return Chip(
-                    label: Text(spec),
-                    backgroundColor: AppColors.primaryColor.withValues(alpha: 0.1),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 30),
-            ],
-            
-            // Quick actions
-            const Text(
-              'Quick Actions',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 10),
-            GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _buildActionCard('Add Property', Icons.add_home, () {}),
-                _buildActionCard('View Clients', Icons.people, () {}),
-                _buildActionCard('Messages', Icons.message, () {}),
-                _buildActionCard('Reports', Icons.analytics, () {}),
-              ],
             ),
           ],
         ),
@@ -365,64 +797,180 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
     );
   }
 
-  Widget _buildStatCard(String label, String value, IconData icon) {
-    return Expanded(
-      child: Card(
-        elevation: 4,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildRecentProperties() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Recent Properties',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
+            TextButton(
+              onPressed: () {
+                // Navigate to My Properties screen
+              },
+              child: const Text('View All'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_isLoading)
+          Column(
+            children: List.generate(
+              3,
+              (i) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildShimmerCard(),
+              ),
+            ),
+          )
+        else if (_recentProperties.isEmpty)
+          _buildEmptyState()
+        else
+          ListView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: _recentProperties.length,
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _buildPropertyCard(_recentProperties[index]),
+              );
+            },
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPropertyCard(Property property) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 70,
+            height: 70,
+            decoration: BoxDecoration(
+              color: AppColors.backgroundColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.home_rounded, color: AppColors.primaryColor, size: 30),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  property.title,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  property.locationDisplay,
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                ),
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: property.status == 'active'
+                            ? Colors.green.withValues(alpha: 0.1)
+                            : Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        property.status.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: property.status == 'active' ? Colors.green : Colors.grey,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.visibility_rounded, size: 14, color: Colors.grey.shade500),
+                    const SizedBox(width: 4),
+                    Text('${property.viewsCount}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Icon(icon, color: AppColors.primaryColor),
-              const SizedBox(height: 10),
               Text(
-                label,
+                property.formattedPrice,
                 style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 24,
                   fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  color: AppColors.primaryColor,
                 ),
               ),
+              const SizedBox(height: 8),
+              Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey.shade400),
             ],
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Container(
+      padding: const EdgeInsets.all(32),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.home_work_outlined, size: 60, color: Colors.grey.shade300),
+            const SizedBox(height: 12),
+            Text('No properties yet', style: TextStyle(color: Colors.grey.shade500)),
+            const SizedBox(height: 8),
+            Text(
+              'Add your first property to get started',
+              style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddPropertyScreen(agent: widget.agent),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Add Property'),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildActionCard(String title, IconData icon, VoidCallback onTap) {
-    return Card(
-      elevation: 4,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 30,
-                color: AppColors.primaryColor,
-              ),
-              const SizedBox(height: 10),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ],
-          ),
+  Widget _buildShimmerCard() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade200,
+      highlightColor: Colors.grey.shade50,
+      child: Container(
+        height: 80,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );
