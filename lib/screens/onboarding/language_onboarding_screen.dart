@@ -89,7 +89,7 @@ class _LanguageOnboardingScreenState extends State<LanguageOnboardingScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
                               decoration: BoxDecoration(
                                 color: isSelected
-                                    ? AppColors.primaryColor.withOpacity(0.08)
+                                    ? AppColors.primaryColor.withValues(alpha: 0.08)
                                     : Colors.white,
                                 border: Border.all(
                                   color: isSelected ? AppColors.primaryColor : Colors.grey.shade300,
@@ -97,7 +97,7 @@ class _LanguageOnboardingScreenState extends State<LanguageOnboardingScreen> {
                                 ),
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: isSelected
-                                    ? [BoxShadow(color: AppColors.primaryColor.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4))]
+                                    ? [BoxShadow(color: AppColors.primaryColor.withValues(alpha: 0.15), blurRadius: 12, offset: const Offset(0, 4))]
                                     : null,
                               ),
                               child: Row(
@@ -160,7 +160,7 @@ class _LanguageOnboardingScreenState extends State<LanguageOnboardingScreen> {
                       backgroundColor: AppColors.secondaryColor,
                       foregroundColor: Colors.white,
                       elevation: 8,
-                      shadowColor: AppColors.accentColor.withOpacity(0.4),
+                      shadowColor: AppColors.accentColor.withValues(alpha: 0.4),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                     ),
                     child: const Text(

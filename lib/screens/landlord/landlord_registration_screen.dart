@@ -294,10 +294,10 @@ class _LandlordRegistrationScreenState extends State<LandlordRegistrationScreen>
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withOpacity(0.05),
+                    color: AppColors.primaryColor.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
-                      color: AppColors.primaryColor.withOpacity(0.2),
+                      color: AppColors.primaryColor.withValues(alpha: 0.2),
                     ),
                   ),
                   child: Row(
@@ -420,7 +420,7 @@ class _LandlordRegistrationScreenState extends State<LandlordRegistrationScreen>
         Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: AppColors.primaryColor.withOpacity(0.1),
+            color: AppColors.primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
           ),
           child: Icon(icon, color: AppColors.primaryColor, size: 20),

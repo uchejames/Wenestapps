@@ -43,7 +43,7 @@ class _LandlordDashboardScreenState extends State<LandlordDashboardScreen> {
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, -5),
             ),
@@ -425,7 +425,7 @@ class _DashboardContentState extends State<DashboardContent> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -437,7 +437,7 @@ class _DashboardContentState extends State<DashboardContent> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, size: 24, color: color),
@@ -478,7 +478,7 @@ class _DashboardContentState extends State<DashboardContent> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.green.withOpacity(0.3),
+            color: Colors.green.withValues(alpha: 0.3),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -492,7 +492,7 @@ class _DashboardContentState extends State<DashboardContent> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
+                  color: Colors.white.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -556,7 +556,7 @@ class _DashboardContentState extends State<DashboardContent> {
             ),
             child: Icon(
               Icons.home_rounded,
-              color: AppColors.primaryColor.withOpacity(0.4),
+              color: AppColors.primaryColor.withValues(alpha: 0.4),
               size: 30,
             ),
           ),
@@ -624,7 +624,7 @@ class _DashboardContentState extends State<DashboardContent> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
@@ -648,7 +648,7 @@ class _DashboardContentState extends State<DashboardContent> {
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -660,7 +660,7 @@ class _DashboardContentState extends State<DashboardContent> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, size: 28, color: color),

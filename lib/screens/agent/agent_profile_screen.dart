@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agent.dart';
-import 'package:wenest/models/property.dart';
 
 // ============ AGENT PROFILE SCREEN ============
 

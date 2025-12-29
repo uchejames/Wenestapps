@@ -1,8 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agency.dart';
+
+class PropertyImageData {
+  File file;
+  bool isPrimary;
+  
+  PropertyImageData({required this.file, this.isPrimary = false});
+}
 
 class AddPropertyScreen extends StatefulWidget {
   final Agency agency;
@@ -16,6 +25,7 @@ class AddPropertyScreen extends StatefulWidget {
 class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _formKey = GlobalKey<FormState>();
   final _supabaseService = SupabaseService();
+  final _imagePicker = ImagePicker();
   
   // Controllers
   final _titleController = TextEditingController();
@@ -38,6 +48,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   bool _isLoading = false;
   int _currentStep = 0;
 
+  // Image management
+  List<PropertyImageData> _images = [];
+  int? _primaryImageIndex;
+  bool _isUploadingImages = false;
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -55,14 +70,129 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     super.dispose();
   }
 
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: color),
+    );
+  }
+
+  Future<void> _pickImages() async {
+    try {
+      final List<XFile> selectedImages = await _imagePicker.pickMultiImage(
+        imageQuality: 80,
+        maxWidth: 1920,
+        maxHeight: 1080,
+      );
+
+      if (selectedImages.isNotEmpty) {
+        setState(() {
+          for (var image in selectedImages) {
+            _images.add(PropertyImageData(
+              file: File(image.path),
+              isPrimary: _images.isEmpty,
+            ));
+          }
+          if (_primaryImageIndex == null && _images.isNotEmpty) {
+            _primaryImageIndex = 0;
+          }
+        });
+      }
+    } catch (e) {
+      _showSnackBar('Error selecting images: $e', Colors.red);
+    }
+  }
+
+  Future<void> _takePicture() async {
+    try {
+      final XFile? photo = await _imagePicker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 80,
+        maxWidth: 1920,
+        maxHeight: 1080,
+      );
+
+      if (photo != null) {
+        setState(() {
+          _images.add(PropertyImageData(
+            file: File(photo.path),
+            isPrimary: _images.isEmpty,
+          ));
+          if (_primaryImageIndex == null) {
+            _primaryImageIndex = 0;
+          }
+        });
+      }
+    } catch (e) {
+      _showSnackBar('Error taking picture: $e', Colors.red);
+    }
+  }
+
+  void _removeImage(int index) {
+    setState(() {
+      _images.removeAt(index);
+      if (_primaryImageIndex == index) {
+        _primaryImageIndex = _images.isNotEmpty ? 0 : null;
+        if (_images.isNotEmpty) {
+          _images[0].isPrimary = true;
+        }
+      } else if (_primaryImageIndex != null && _primaryImageIndex! > index) {
+        _primaryImageIndex = _primaryImageIndex! - 1;
+      }
+    });
+  }
+
+  void _setPrimaryImage(int index) {
+    setState(() {
+      for (var img in _images) {
+        img.isPrimary = false;
+      }
+      _images[index].isPrimary = true;
+      _primaryImageIndex = index;
+    });
+  }
+
+  Future<List<String>> _uploadImages(String propertyId) async {
+    setState(() => _isUploadingImages = true);
+    List<String> uploadedUrls = [];
+
+    try {
+      for (int i = 0; i < _images.length; i++) {
+        final image = _images[i];
+        final fileName = 'property_${propertyId}_${DateTime.now().millisecondsSinceEpoch}_$i.jpg';
+        final filePath = '${widget.agency.id}/$propertyId/$fileName';
+
+        await _supabaseService.client.storage
+            .from('property-uploads')
+            .upload(filePath, image.file);
+
+        final url = _supabaseService.client.storage
+            .from('property-uploads')
+            .getPublicUrl(filePath);
+
+        uploadedUrls.add(url);
+
+        await _supabaseService.client.from('property_media').insert({
+          'property_id': int.parse(propertyId),
+          'file_url': url,
+          'file_type': 'image',
+          'display_order': i,
+          'is_primary': image.isPrimary,
+          'created_at': DateTime.now().toIso8601String(),
+        });
+      }
+    } catch (e) {
+      print('Error uploading images: $e');
+      rethrow;
+    } finally {
+      setState(() => _isUploadingImages = false);
+    }
+
+    return uploadedUrls;
+  }
+
   Future<void> _submitProperty({bool publish = false}) async {
     if (!_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill all required fields'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      _showSnackBar('Please fill all required fields', Colors.orange);
       return;
     }
 
@@ -89,24 +219,26 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         negotiable: _negotiable,
       );
 
+      if (_images.isNotEmpty) {
+        await _uploadImages(propertyId);
+      }
+
       if (publish) {
         await _supabaseService.publishProperty(propertyId);
       }
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(publish ? 'Property published successfully!' : 'Property saved as draft!'),
-            backgroundColor: Colors.green,
-          ),
+        _showSnackBar(
+          publish 
+            ? 'Property published! It will be reviewed within 48 hours. It\'s live now but may be taken down if it doesn\'t meet our standards.' 
+            : 'Property saved as draft!',
+          Colors.green,
         );
         Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
+        _showSnackBar('Error: $e', Colors.red);
       }
     } finally {
       if (mounted) {
@@ -128,7 +260,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         child: Stepper(
           currentStep: _currentStep,
           onStepContinue: () {
-            if (_currentStep < 3) {
+            if (_currentStep < 4) {
               setState(() => _currentStep++);
             }
           },
@@ -142,7 +274,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               padding: const EdgeInsets.only(top: 20),
               child: Row(
                 children: [
-                  if (_currentStep < 3)
+                  if (_currentStep < 4)
                     Expanded(
                       child: ElevatedButton(
                         onPressed: details.onStepContinue,
@@ -152,7 +284,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                         child: const Text('Continue'),
                       ),
                     ),
-                  if (_currentStep == 3) ...[
+                  if (_currentStep == 4) ...[
                     Expanded(
                       child: OutlinedButton(
                         onPressed: _isLoading ? null : () => _submitProperty(publish: false),
@@ -211,8 +343,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               content: _buildLocationStep(),
             ),
             Step(
-              title: const Text('Review & Publish'),
+              title: const Text('Photos'),
               isActive: _currentStep >= 3,
+              state: _currentStep > 3 ? StepState.complete : StepState.indexed,
+              content: _buildPhotosStep(),
+            ),
+            Step(
+              title: const Text('Review & Publish'),
+              isActive: _currentStep >= 4,
               state: StepState.indexed,
               content: _buildReviewStep(),
             ),
@@ -226,7 +364,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Title
         TextFormField(
           controller: _titleController,
           decoration: const InputDecoration(
@@ -239,7 +376,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ),
         const SizedBox(height: 16),
         
-        // Description
         TextFormField(
           controller: _descriptionController,
           maxLines: 5,
@@ -254,7 +390,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ),
         const SizedBox(height: 16),
         
-        // Property Type
         DropdownButtonFormField<String>(
           value: _propertyType,
           decoration: const InputDecoration(
@@ -274,7 +409,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ),
         const SizedBox(height: 16),
         
-        // Listing Type
         DropdownButtonFormField<String>(
           value: _listingType,
           decoration: const InputDecoration(
@@ -291,7 +425,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ),
         const SizedBox(height: 16),
         
-        // Price
         TextFormField(
           controller: _priceController,
           keyboardType: TextInputType.number,
@@ -305,7 +438,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ),
         const SizedBox(height: 12),
         
-        // Negotiable Checkbox
         CheckboxListTile(
           value: _negotiable,
           onChanged: (value) => setState(() => _negotiable = value!),
@@ -459,6 +591,171 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
+  Widget _buildPhotosStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.blue.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.blue.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, color: Colors.blue.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Add high-quality photos. The first image marked as primary will be the cover photo.',
+                  style: TextStyle(fontSize: 13, color: Colors.blue.shade900),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: _pickImages,
+                icon: const Icon(Icons.photo_library_rounded),
+                label: const Text('Select Photos'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _takePicture,
+                icon: const Icon(Icons.camera_alt_rounded),
+                label: const Text('Take Photo'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 20),
+        
+        if (_images.isEmpty)
+          Container(
+            height: 200,
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid, width: 2),
+            ),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_photo_alternate_outlined, size: 60, color: Colors.grey.shade400),
+                  const SizedBox(height: 12),
+                  Text('No photos added yet', style: TextStyle(color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+            ),
+            itemCount: _images.length,
+            itemBuilder: (context, index) {
+              final image = _images[index];
+              return Stack(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: image.isPrimary ? AppColors.primaryColor : Colors.grey.shade300,
+                        width: image.isPrimary ? 3 : 1,
+                      ),
+                      image: DecorationImage(
+                        image: FileImage(image.file),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  if (image.isPrimary)
+                    Positioned(
+                      top: 4,
+                      left: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryColor,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: const Text(
+                          'PRIMARY',
+                          style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    ),
+                  Positioned(
+                    top: 4,
+                    right: 4,
+                    child: Row(
+                      children: [
+                        if (!image.isPrimary)
+                          GestureDetector(
+                            onTap: () => _setPrimaryImage(index),
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4)],
+                              ),
+                              child: const Icon(Icons.star_border, size: 16, color: Colors.orange),
+                            ),
+                          ),
+                        const SizedBox(width: 4),
+                        GestureDetector(
+                          onTap: () => _removeImage(index),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              shape: BoxShape.circle,
+                              boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 4)],
+                            ),
+                            child: const Icon(Icons.close, size: 16, color: Colors.white),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        
+        if (_images.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(
+            '${_images.length} photo(s) selected',
+            style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildReviewStep() {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -483,21 +780,23 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             _buildReviewItem('Bedrooms', _bedroomsController.text),
           if (_bathroomsController.text.isNotEmpty)
             _buildReviewItem('Bathrooms', _bathroomsController.text),
-          const SizedBox(height: 12),
+          _buildReviewItem('Photos', '${_images.length} image(s)'),
+          const SizedBox(height: 16),
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: Colors.blue.shade50,
+              color: Colors.orange.shade50,
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.orange.shade200),
             ),
             child: Row(
               children: [
-                Icon(Icons.info_rounded, color: Colors.blue.shade700, size: 20),
+                Icon(Icons.info_rounded, color: Colors.orange.shade700, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'You can save as draft or publish directly. Published properties will be visible to users immediately.',
-                    style: TextStyle(fontSize: 12, color: Colors.blue.shade700),
+                    'Your property will go live immediately but will be reviewed within 48 hours. It may be taken down if it doesn\'t meet our standards.',
+                    style: TextStyle(fontSize: 12, color: Colors.orange.shade900),
                   ),
                 ),
               ],

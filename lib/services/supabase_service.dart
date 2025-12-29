@@ -4,6 +4,7 @@ import 'package:wenest/models/agency.dart';
 import 'package:wenest/models/agent.dart';
 import 'package:wenest/models/landlord.dart';
 import 'package:wenest/models/property.dart';
+import 'dart:io';
 
 class SupabaseService {
   static const String supabaseUrl = 'https://gcbpxkwwscylyjemdpcd.supabase.co';
@@ -129,6 +130,97 @@ class SupabaseService {
 
     await client.from('profiles').update(updates).eq('id', userId);
   }
+
+  // ============ STORAGE METHODS ============
+  
+/// Upload file to Supabase Storage
+Future<String> uploadFile({
+  required String bucket,
+  required String path,
+  required File file,
+}) async {
+  try {
+    await client.storage.from(bucket).upload(path, file);
+    final url = client.storage.from(bucket).getPublicUrl(path);
+    return url;
+  } catch (e) {
+    print('Error uploading file: $e');
+    rethrow;
+  }
+}
+
+/// Delete file from Supabase Storage
+Future<void> deleteFile({
+  required String bucket,
+  required String path,
+}) async {
+  try {
+    await client.storage.from(bucket).remove([path]);
+  } catch (e) {
+    print('Error deleting file: $e');
+    rethrow;
+  }
+}
+
+// ============ PROPERTY MEDIA METHODS ============
+
+Future<List<Map<String, dynamic>>> getPropertyMedia(int propertyId) async {
+  try {
+    final response = await client
+        .from('property_media')
+        .select()
+        .eq('property_id', propertyId)
+        .order('display_order', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
+  } catch (e) {
+    print('Error getting property media: $e');
+    return [];
+  }
+}
+
+Future<void> addPropertyMedia({
+  required int propertyId,
+  required String fileUrl,
+  String fileType = 'image',
+  int displayOrder = 0,
+  bool isPrimary = false,
+  String? caption,
+}) async {
+  try {
+    await client.from('property_media').insert({
+      'property_id': propertyId,
+      'file_url': fileUrl,
+      'file_type': fileType,
+      'display_order': displayOrder,
+      'is_primary': isPrimary,
+      'caption': caption,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  } catch (e) {
+    print('Error adding property media: $e');
+    rethrow;
+  }
+}
+
+Future<void> updatePropertyMediaPrimary(String mediaId, bool isPrimary) async {
+  try {
+    await client.from('property_media').update({
+      'is_primary': isPrimary,
+    }).eq('id', mediaId);
+  } catch (e) {
+    print('Error updating property media: $e');
+    rethrow;
+  }
+}
+
+Future<void> deletePropertyMedia(String mediaId) async {
+  try {
+    await client.from('property_media').delete().eq('id', mediaId);
+  } catch (e) {
+    print('Error deleting property media: $e');
+    rethrow;
+  }
+}
 
   // ============ PROPERTY METHODS ============
   
@@ -407,6 +499,94 @@ class SupabaseService {
     }
   }
 
+  // Add this method to SupabaseService class
+
+  // ============ ENHANCED PROPERTY METHODS WITH MEDIA ============
+
+  Future<List<Property>> getPropertiesWithMedia({
+    String? propertyType,
+    String? listingType,
+    String? state,
+    String? cityArea,
+    double? minPrice,
+    double? maxPrice,
+    int? minBedrooms,
+    int? maxBedrooms,
+    bool? isFeatured,
+    String? status = 'active',
+    String? agencyId,
+    String? agentId,
+    String? landlordId,
+    int limit = 50,
+  }) async {
+    try {
+      // Get properties first
+      final properties = await getProperties(
+        propertyType: propertyType,
+        listingType: listingType,
+        state: state,
+        cityArea: cityArea,
+        minPrice: minPrice,
+        maxPrice: maxPrice,
+        minBedrooms: minBedrooms,
+        maxBedrooms: maxBedrooms,
+        isFeatured: isFeatured,
+        status: status,
+        agencyId: agencyId,
+        agentId: agentId,
+        landlordId: landlordId,
+        limit: limit,
+      );
+
+      // Load media for each property
+      final propertiesWithMedia = <Property>[];
+      for (var property in properties) {
+        final media = await getPropertyMedia(property.id);
+        final primaryImage = media.firstWhere(
+          (m) => m['is_primary'] == true,
+          orElse: () => media.isNotEmpty ? media.first : {},
+        );
+        
+        final mediaList = media.map((m) => PropertyMedia.fromJson(m)).toList();
+        final primaryImageUrl = primaryImage.isNotEmpty ? primaryImage['file_url'] as String? : null;
+        
+        propertiesWithMedia.add(property.copyWith(
+          media: mediaList,
+          primaryImageUrl: primaryImageUrl,
+        ));
+      }
+
+      return propertiesWithMedia;
+    } catch (e) {
+      print('Error getting properties with media: $e');
+      return [];
+    }
+  }
+
+  Future<Property?> getPropertyByIdWithMedia(String id) async {
+    try {
+      final property = await getPropertyById(id);
+      if (property == null) return null;
+
+      final media = await getPropertyMedia(property.id);
+      final primaryImage = media.firstWhere(
+        (m) => m['is_primary'] == true,
+        orElse: () => media.isNotEmpty ? media.first : {},
+      );
+      
+      final mediaList = media.map((m) => PropertyMedia.fromJson(m)).toList();
+      final primaryImageUrl = primaryImage.isNotEmpty ? primaryImage['file_url'] as String? : null;
+      
+      return property.copyWith(
+        media: mediaList,
+        primaryImageUrl: primaryImageUrl,
+      );
+    } catch (e) {
+      print('Error getting property with media: $e');
+      return null;
+    }
+  }
+
   Future<Landlord?> getLandlordById(String id) async {
     try {
       final response = await client
@@ -454,10 +634,12 @@ class SupabaseService {
     int limit = 50,
   }) async {
     try {
-      dynamic query = client
-          .from('properties')
-          .select()
-          .eq('is_approved', true);
+          dynamic query = client.from('properties').select();
+
+          // Only show approved properties to public unless filtering by owner
+          if (agencyId == null && agentId == null && landlordId == null) {
+            query = query.eq('is_approved', true);
+          }
       
       if (status != null) query = query.eq('status', status);
       if (propertyType != null) query = query.eq('property_type', propertyType);
@@ -579,6 +761,8 @@ class SupabaseService {
         'longitude': longitude,
         'status': 'draft',
         'is_approved': false,
+        'auto_publish': true,  // NEW: Will auto-publish via trigger
+        'review_status': 'pending',  // NEW: For review system
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       }).select().single();

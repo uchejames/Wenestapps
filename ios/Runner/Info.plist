@@ -45,5 +45,15 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	
+	<!-- Camera and Photo Library Permissions -->
+	<key>NSCameraUsageDescription</key>
+	<string>We need access to your camera to take photos of your properties</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>We need access to your photo library to select property images</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>We need permission to save property photos to your library</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>We need access to your microphone to record property videos</string>
 </dict>
 </plist>

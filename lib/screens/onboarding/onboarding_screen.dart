@@ -83,7 +83,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   onPressed: _skipOnboarding,
                   child: Text(
                     'Skip',
-                    style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16, fontWeight: FontWeight.w500),
+                    style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 16, fontWeight: FontWeight.w500),
                   ),
                 ),
               ),
@@ -111,7 +111,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         ),
 
         // Deep teal overlay
-        Container(color: AppColors.primaryColor.withOpacity(0.45)),
+        Container(color: AppColors.primaryColor.withValues(alpha: 0.45)),
 
         // Bottom gradient
         Align(
@@ -122,7 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [Colors.transparent, AppColors.primaryColor.withOpacity(0.98)],
+                colors: [Colors.transparent, AppColors.primaryColor.withValues(alpha: 0.98)],
                 stops: const [0.0, 0.65],
               ),
             ),
@@ -188,10 +188,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           width: isLastPage ? 180 : 66,
                           height: 66,
                           decoration: BoxDecoration(
-                            color: isLastPage ? AppColors.secondaryColor : Colors.white.withOpacity(0.28),
+                            color: isLastPage ? AppColors.secondaryColor : Colors.white.withValues(alpha: 0.28),
                             borderRadius: BorderRadius.circular(33),
                             boxShadow: isLastPage
-                                ? [BoxShadow(color: AppColors.accentColor.withOpacity(0.5), blurRadius: 18, offset: const Offset(0, 8))]
+                                ? [BoxShadow(color: AppColors.accentColor.withValues(alpha: 0.5), blurRadius: 18, offset: const Offset(0, 8))]
                                 : null,
                           ),
                           child: Center(

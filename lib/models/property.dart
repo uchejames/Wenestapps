@@ -4,7 +4,7 @@ class Property {
   final String? landlordId;
   final String? agencyId;
   final String title;
-  final String? description;
+  final String description;
   final String propertyType;
   final String listingType;
   final double price;
@@ -37,6 +37,16 @@ class Property {
   final DateTime? featuredUntil;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final String? reviewStatus;
+  final DateTime? reviewSubmittedAt;
+  final String? reviewNotes;
+  final String? reviewedBy;
+  final DateTime? reviewedAt;
+  final bool autoPublish;
+  
+  // Media fields
+  final List<PropertyMedia> media;
+  final String? primaryImageUrl;
 
   Property({
     required this.id,
@@ -44,7 +54,7 @@ class Property {
     this.landlordId,
     this.agencyId,
     required this.title,
-    this.description,
+    required this.description,
     required this.propertyType,
     required this.listingType,
     required this.price,
@@ -77,6 +87,14 @@ class Property {
     this.featuredUntil,
     required this.createdAt,
     required this.updatedAt,
+    this.reviewStatus,
+    this.reviewSubmittedAt,
+    this.reviewNotes,
+    this.reviewedBy,
+    this.reviewedAt,
+    this.autoPublish = true,
+    this.media = const [],
+    this.primaryImageUrl,
   });
 
   factory Property.fromJson(Map<String, dynamic> json) {
@@ -86,7 +104,7 @@ class Property {
       landlordId: json['landlord_id'] as String?,
       agencyId: json['agency_id'] as String?,
       title: json['title'] as String,
-      description: json['description'] as String?,
+      description: json['description'] as String? ?? '',
       propertyType: json['property_type'] as String,
       listingType: json['listing_type'] as String,
       price: (json['price'] as num).toDouble(),
@@ -119,65 +137,87 @@ class Property {
       featuredUntil: json['featured_until'] != null ? DateTime.parse(json['featured_until'] as String) : null,
       createdAt: DateTime.parse(json['created_at'] as String),
       updatedAt: DateTime.parse(json['updated_at'] as String),
+      reviewStatus: json['review_status'] as String?,
+      reviewSubmittedAt: json['review_submitted_at'] != null ? DateTime.parse(json['review_submitted_at'] as String) : null,
+      reviewNotes: json['review_notes'] as String?,
+      reviewedBy: json['reviewed_by'] as String?,
+      reviewedAt: json['reviewed_at'] != null ? DateTime.parse(json['reviewed_at'] as String) : null,
+      autoPublish: json['auto_publish'] as bool? ?? true,
+      media: [], // Will be loaded separately
+      primaryImageUrl: null, // Will be loaded separately
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'agent_id': agentId,
-      'landlord_id': landlordId,
-      'agency_id': agencyId,
-      'title': title,
-      'description': description,
-      'property_type': propertyType,
-      'listing_type': listingType,
-      'price': price,
-      'currency': currency,
-      'negotiable': negotiable,
-      'address': address,
-      'city_area': cityArea,
-      'state': state,
-      'country': country,
-      'latitude': latitude,
-      'longitude': longitude,
-      'bedrooms': bedrooms,
-      'bathrooms': bathrooms,
-      'toilets': toilets,
-      'square_meters': squareMeters,
-      'year_built': yearBuilt,
-      'furnishing_status': furnishingStatus,
-      'parking_spaces': parkingSpaces,
-      'status': status,
-      'is_approved': isApproved,
-      'is_featured': isFeatured,
-      'is_verified': isVerified,
-      'views_count': viewsCount,
-      'saves_count': savesCount,
-      'inquiries_count': inquiriesCount,
-      'slug': slug,
-      'meta_title': metaTitle,
-      'meta_description': metaDescription,
-      'published_at': publishedAt?.toIso8601String(),
-      'featured_until': featuredUntil?.toIso8601String(),
-      'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt.toIso8601String(),
-    };
+  Property copyWith({
+    List<PropertyMedia>? media,
+    String? primaryImageUrl,
+  }) {
+    return Property(
+      id: id,
+      agentId: agentId,
+      landlordId: landlordId,
+      agencyId: agencyId,
+      title: title,
+      description: description,
+      propertyType: propertyType,
+      listingType: listingType,
+      price: price,
+      currency: currency,
+      negotiable: negotiable,
+      address: address,
+      cityArea: cityArea,
+      state: state,
+      country: country,
+      latitude: latitude,
+      longitude: longitude,
+      bedrooms: bedrooms,
+      bathrooms: bathrooms,
+      toilets: toilets,
+      squareMeters: squareMeters,
+      yearBuilt: yearBuilt,
+      furnishingStatus: furnishingStatus,
+      parkingSpaces: parkingSpaces,
+      status: status,
+      isApproved: isApproved,
+      isFeatured: isFeatured,
+      isVerified: isVerified,
+      viewsCount: viewsCount,
+      savesCount: savesCount,
+      inquiriesCount: inquiriesCount,
+      slug: slug,
+      metaTitle: metaTitle,
+      metaDescription: metaDescription,
+      publishedAt: publishedAt,
+      featuredUntil: featuredUntil,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+      reviewStatus: reviewStatus,
+      reviewSubmittedAt: reviewSubmittedAt,
+      reviewNotes: reviewNotes,
+      reviewedBy: reviewedBy,
+      reviewedAt: reviewedAt,
+      autoPublish: autoPublish,
+      media: media ?? this.media,
+      primaryImageUrl: primaryImageUrl ?? this.primaryImageUrl,
+    );
   }
 
+  String get locationDisplay => '$cityArea, $state';
+  
   String get formattedPrice {
-    return '₦${price.toStringAsFixed(0).replaceAllMapped(
+    final priceStr = price.toStringAsFixed(0).replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]},',
-    )}';
+    );
+    return '₦$priceStr';
   }
 
   String get listingTypeDisplay {
-    switch (listingType.toLowerCase()) {
-      case 'sale':
-        return 'For Sale';
+    switch (listingType) {
       case 'rent':
         return 'For Rent';
+      case 'sale':
+        return 'For Sale';
       case 'lease':
         return 'For Lease';
       case 'shortlet':
@@ -188,7 +228,7 @@ class Property {
   }
 
   String get propertyTypeDisplay {
-    switch (propertyType.toLowerCase()) {
+    switch (propertyType) {
       case 'apartment':
         return 'Apartment';
       case 'house':
@@ -207,8 +247,52 @@ class Property {
         return propertyType;
     }
   }
+}
 
-  String get locationDisplay {
-    return '$cityArea, $state';
+class PropertyMedia {
+  final String id;
+  final int propertyId;
+  final String fileUrl;
+  final String fileType;
+  final String? caption;
+  final int displayOrder;
+  final bool isPrimary;
+  final DateTime createdAt;
+
+  PropertyMedia({
+    required this.id,
+    required this.propertyId,
+    required this.fileUrl,
+    this.fileType = 'image',
+    this.caption,
+    this.displayOrder = 0,
+    this.isPrimary = false,
+    required this.createdAt,
+  });
+
+  factory PropertyMedia.fromJson(Map<String, dynamic> json) {
+    return PropertyMedia(
+      id: json['id'] as String,
+      propertyId: json['property_id'] as int,
+      fileUrl: json['file_url'] as String,
+      fileType: json['file_type'] as String? ?? 'image',
+      caption: json['caption'] as String?,
+      displayOrder: json['display_order'] as int? ?? 0,
+      isPrimary: json['is_primary'] as bool? ?? false,
+      createdAt: DateTime.parse(json['created_at'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'property_id': propertyId,
+      'file_url': fileUrl,
+      'file_type': fileType,
+      'caption': caption,
+      'display_order': displayOrder,
+      'is_primary': isPrimary,
+      'created_at': createdAt.toIso8601String(),
+    };
   }
 }

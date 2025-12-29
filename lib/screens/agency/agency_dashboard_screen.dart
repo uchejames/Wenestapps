@@ -107,7 +107,7 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
     
     switch (_selectedIndex) {
       case 0:
-        return _agency?.name ?? 'Agency Dashboard';
+        return 'Dashboard';
       case 1:
         return 'My Properties';
       case 2:
@@ -123,7 +123,7 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
       case 7:
         return 'Help & Support';
       default:
-        return _agency?.name ?? 'Agency Dashboard';
+        return 'Dashboard';
     }
   }
 
@@ -135,6 +135,7 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
         title: Text(_getAppBarTitle()),
         backgroundColor: AppColors.primaryColor,
         foregroundColor: Colors.white,
+        elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.menu_rounded),
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
@@ -217,7 +218,7 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
           // Drawer Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 50, 20, 20),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [AppColors.primaryColor, AppColors.lightTeal],
@@ -337,7 +338,7 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
             ),
             child: ListTile(
               leading: const Icon(Icons.logout_rounded, color: Colors.red),
-              title: const Text('Sign Out', style: TextStyle(color: Colors.red)),
+              title: const Text('Sign Out', style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600)),
               onTap: () {
                 Navigator.pop(context);
                 _handleSignOut();
@@ -381,12 +382,14 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
       onTap: (index) {
         if (index == 2) {
           // Navigate to Add Property screen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddPropertyScreen(agency: _agency!),
-            ),
-          ).then((_) => _loadAgencyData());
+          if (_agency != null) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AddPropertyScreen(agency: _agency!),
+              ),
+            ).then((_) => _loadAgencyData());
+          }
         } else {
           _onNavItemTapped(index);
         }
@@ -437,7 +440,7 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
 
     switch (_selectedIndex) {
       case 0:
-        return AgencyDashboardOverview(agency: _agency!, onRefresh: _loadAgencyData);
+        return AgencyDashboardOverview(agency: _agency!, onRefresh: _loadAgencyData, onNavigate: (index) => setState(() => _selectedIndex = index));
       case 1:
         return MyPropertiesScreen(agency: _agency!);
       case 2:
@@ -453,7 +456,7 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
       case 7:
         return const HelpSupportScreen();
       default:
-        return AgencyDashboardOverview(agency: _agency!, onRefresh: _loadAgencyData);
+        return AgencyDashboardOverview(agency: _agency!, onRefresh: _loadAgencyData, onNavigate: (index) => setState(() => _selectedIndex = index));
     }
   }
 }
@@ -463,11 +466,13 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
 class AgencyDashboardOverview extends StatefulWidget {
   final Agency agency;
   final VoidCallback onRefresh;
+  final Function(int) onNavigate;
 
   const AgencyDashboardOverview({
     super.key,
     required this.agency,
     required this.onRefresh,
+    required this.onNavigate,
   });
 
   @override
@@ -533,22 +538,15 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
       color: AppColors.primaryColor,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildWelcomeCard(),
-              const SizedBox(height: 24),
-              if (widget.agency.verified != true) _buildVerificationAlert(),
-              if (widget.agency.verified != true) const SizedBox(height: 24),
-              _buildStatsGrid(),
-              const SizedBox(height: 32),
-              _buildQuickActions(),
-              const SizedBox(height: 32),
-              _buildRecentProperties(),
-            ],
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildWelcomeCard(),
+            if (widget.agency.verified != true) _buildVerificationAlert(),
+            _buildStatsGrid(),
+            _buildQuickActions(),
+            _buildRecentProperties(),
+          ],
         ),
       ),
     );
@@ -556,20 +554,20 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
 
   Widget _buildWelcomeCard() {
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [AppColors.primaryColor, AppColors.lightTeal],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
             color: AppColors.primaryColor.withValues(alpha: 0.3),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
           ),
         ],
       ),
@@ -577,23 +575,30 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Welcome back! 👋',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                    Text(
+                      'Welcome back,',
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       widget.agency.name,
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -615,8 +620,11 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
           ),
           const SizedBox(height: 16),
           Text(
-            "Here's what's happening with your properties today",
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
+            "Here's your property overview today",
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.95),
+              fontSize: 14,
+            ),
           ),
         ],
       ),
@@ -625,6 +633,7 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
 
   Widget _buildVerificationAlert() {
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.orange.shade50,
@@ -649,23 +658,25 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
   Widget _buildStatsGrid() {
     if (_isLoading) {
       return GridView.count(
+        padding: const EdgeInsets.all(20),
         crossAxisCount: 2,
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         mainAxisSpacing: 16,
         crossAxisSpacing: 16,
-        childAspectRatio: 1.5,
+        childAspectRatio: 1.4,
         children: List.generate(4, (i) => _buildShimmerCard()),
       );
     }
 
     return GridView.count(
+      padding: const EdgeInsets.all(20),
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
-      childAspectRatio: 1.5,
+      childAspectRatio: 1.4,
       children: [
         _buildStatCard('Total Properties', '${_stats['total']}', Icons.house_rounded, AppColors.primaryColor),
         _buildStatCard('Active Listings', '${_stats['active']}', Icons.check_circle_rounded, Colors.green),
@@ -707,7 +718,7 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
             children: [
               Text(
                 value,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
               Text(
@@ -722,42 +733,45 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
   }
 
   Widget _buildQuickActions() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Quick Actions',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 16),
-        GridView.count(
-          crossAxisCount: 2,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 2.2,
-          children: [
-            _buildActionButton('Add Property', Icons.add_rounded, AppColors.primaryColor, () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => AddPropertyScreen(agency: widget.agency),
-                ),
-              );
-            }),
-            _buildActionButton('Manage Agents', Icons.people_rounded, AppColors.secondaryColor, () {
-              // Navigate to manage agents - handled by parent
-            }),
-            _buildActionButton('Analytics', Icons.analytics_rounded, AppColors.accentColor, () {
-              // Navigate to analytics - handled by parent
-            }),
-            _buildActionButton('Messages', Icons.message_rounded, Colors.grey.shade700, () {
-              Navigator.pushNamed(context, AppRoutes.userMessages);
-            }),
-          ],
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Quick Actions',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          GridView.count(
+            crossAxisCount: 2,
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            mainAxisSpacing: 12,
+            crossAxisSpacing: 12,
+            childAspectRatio: 2.2,
+            children: [
+              _buildActionButton('Add Property', Icons.add_rounded, AppColors.primaryColor, () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AddPropertyScreen(agency: widget.agency),
+                  ),
+                ).then((_) => _loadDashboardData());
+              }),
+              _buildActionButton('Manage Agents', Icons.people_rounded, AppColors.secondaryColor, () {
+                widget.onNavigate(3);
+              }),
+              _buildActionButton('Analytics', Icons.analytics_rounded, AppColors.accentColor, () {
+                widget.onNavigate(4);
+              }),
+              _buildActionButton('Messages', Icons.message_rounded, Colors.grey.shade700, () {
+                Navigator.pushNamed(context, AppRoutes.userMessages);
+              }),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -793,50 +807,53 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
   }
 
   Widget _buildRecentProperties() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'Recent Properties',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            TextButton(
-              onPressed: () {
-                // Navigate to My Properties - handled by parent
-              },
-              child: const Text('View All'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        if (_isLoading)
-          Column(
-            children: List.generate(
-              3,
-              (i) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildShimmerCard(),
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Recent Properties',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-            ),
-          )
-        else if (_recentProperties.isEmpty)
-          _buildEmptyState()
-        else
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _recentProperties.length,
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildPropertyCard(_recentProperties[index]),
-              );
-            },
+              TextButton(
+                onPressed: () {
+                  widget.onNavigate(1);
+                },
+                child: const Text('View All'),
+              ),
+            ],
           ),
-      ],
+          const SizedBox(height: 12),
+          if (_isLoading)
+            Column(
+              children: List.generate(
+                3,
+                (i) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildShimmerCard(),
+                ),
+              ),
+            )
+          else if (_recentProperties.isEmpty)
+            _buildEmptyState()
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _recentProperties.length,
+              itemBuilder: (context, index) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _buildPropertyCard(_recentProperties[index]),
+                );
+              },
+            ),
+        ],
+      ),
     );
   }
 
@@ -946,7 +963,7 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
                   MaterialPageRoute(
                     builder: (context) => AddPropertyScreen(agency: widget.agency),
                   ),
-                );
+                ).then((_) => _loadDashboardData());
               },
               icon: const Icon(Icons.add_rounded),
               label: const Text('Add Property'),

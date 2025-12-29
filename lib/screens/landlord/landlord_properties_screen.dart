@@ -174,7 +174,7 @@ class _LandlordPropertiesScreenState extends State<LandlordPropertiesScreen> wit
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -195,7 +195,7 @@ class _LandlordPropertiesScreenState extends State<LandlordPropertiesScreen> wit
                   child: Icon(
                     Icons.home_rounded,
                     size: 60,
-                    color: AppColors.primaryColor.withOpacity(0.2),
+                    color: AppColors.primaryColor.withValues(alpha: 0.2),
                   ),
                 ),
               ),
@@ -214,7 +214,7 @@ class _LandlordPropertiesScreenState extends State<LandlordPropertiesScreen> wit
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
+                        color: Colors.black.withValues(alpha: 0.1),
                         blurRadius: 8,
                       ),
                     ],
@@ -283,7 +283,7 @@ class _LandlordPropertiesScreenState extends State<LandlordPropertiesScreen> wit
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _getListingTypeColor(property.listingType).withOpacity(0.1),
+                        color: _getListingTypeColor(property.listingType).withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -371,7 +371,7 @@ class _LandlordPropertiesScreenState extends State<LandlordPropertiesScreen> wit
         borderRadius: BorderRadius.circular(8),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
+            color: color.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),

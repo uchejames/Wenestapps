@@ -230,7 +230,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(8), // replaced withOpacity(0.03)
+                    color: Colors.black.withAlpha(8), // replaced withValues(alpha: 0.03)
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
