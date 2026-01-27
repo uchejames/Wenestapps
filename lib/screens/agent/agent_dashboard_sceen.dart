@@ -3,6 +3,7 @@ import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agent.dart';
 import 'package:wenest/models/property.dart';
+import 'package:wenest/models/property_media.dart';
 import 'package:shimmer/shimmer.dart';
 
 // Import agent screens
@@ -12,6 +13,7 @@ import 'package:wenest/screens/agent/my_clients_screen.dart';
 import 'package:wenest/screens/agent/agent_profile_screen.dart';
 import 'package:wenest/screens/agent/agent_performance_screen.dart';
 import 'package:wenest/screens/agent/join_agency_screen.dart';
+import 'package:wenest/screens/shared/messages_screen.dart';
 
 class AgentDashboardScreen extends StatefulWidget {
   const AgentDashboardScreen({super.key});
@@ -27,6 +29,10 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
   bool _isLoading = true;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Dashboard data
+  List<Property> _recentProperties = [];
+  Map<String, dynamic> _stats = {};
+
   @override
   void initState() {
     super.initState();
@@ -41,11 +47,12 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
         final agent = await _supabaseService.getAgentByProfileId(user.id);
         setState(() {
           _agent = agent;
-          _isLoading = false;
         });
+        
+        // Load dashboard data
+        await _loadDashboardData();
       }
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -54,6 +61,44 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
           ),
         );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _loadDashboardData() async {
+    if (_agent == null) return;
+    
+    try {
+      // Load recent properties
+      final properties = await _supabaseService.getProperties(
+        agentId: _agent!.id,
+        limit: 5,
+      );
+
+      // Calculate stats
+      final allProperties = await _supabaseService.getProperties(
+        agentId: _agent!.id,
+        limit: 1000,
+      );
+
+      final activeCount = allProperties.where((p) => p.status == 'active').length;
+      final totalViews = allProperties.fold<int>(0, (sum, p) => sum + p.viewsCount);
+      final totalInquiries = allProperties.fold<int>(0, (sum, p) => sum + p.inquiriesCount);
+
+      setState(() {
+        _recentProperties = properties;
+        _stats = {
+          'total_properties': allProperties.length,
+          'active_properties': activeCount,
+          'total_views': totalViews,
+          'total_inquiries': totalInquiries,
+        };
+      });
+    } catch (e) {
+      // Silent fail for dashboard stats
     }
   }
 
@@ -81,7 +126,7 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
       try {
         await _supabaseService.signOut();
         if (mounted) {
-          Navigator.pushReplacementNamed(context, AppRoutes.login);
+          Navigator.pushReplacementNamed(context, '/login');
         }
       } catch (error) {
         if (mounted) {
@@ -144,7 +189,7 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_rounded),
-            onPressed: () => Navigator.pushNamed(context, AppRoutes.notifications),
+            onPressed: () => Navigator.pushNamed(context, '/notifications'),
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert_rounded),
@@ -155,11 +200,13 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                   leading: Icon(Icons.settings_rounded, size: 20),
                   title: Text('Settings'),
                   contentPadding: EdgeInsets.zero,
+                  dense: true,
                 ),
-                onTap: () {
-                  Future.delayed(Duration.zero, () {
-                    Navigator.pushNamed(context, AppRoutes.settings);
-                  });
+                onTap: () async {
+                  await Future.delayed(Duration.zero);
+                  if (mounted) {
+                    Navigator.pushNamed(context, '/settings');
+                  }
                 },
               ),
               PopupMenuItem<String>(
@@ -168,11 +215,13 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                   leading: Icon(Icons.help_rounded, size: 20),
                   title: Text('Help & Support'),
                   contentPadding: EdgeInsets.zero,
+                  dense: true,
                 ),
-                onTap: () {
-                  Future.delayed(Duration.zero, () {
-                    Navigator.pushNamed(context, AppRoutes.helpSupport);
-                  });
+                onTap: () async {
+                  await Future.delayed(Duration.zero);
+                  if (mounted) {
+                    Navigator.pushNamed(context, '/help_support');
+                  }
                 },
               ),
               const PopupMenuDivider(),
@@ -182,6 +231,7 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                   leading: Icon(Icons.logout_rounded, color: Colors.red, size: 20),
                   title: Text('Sign Out', style: TextStyle(color: Colors.red)),
                   contentPadding: EdgeInsets.zero,
+                  dense: true,
                 ),
                 onTap: () {
                   Future.delayed(Duration.zero, () {
@@ -196,6 +246,18 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
       drawer: _buildDrawer(),
       body: _buildBody(),
       bottomNavigationBar: _buildBottomNavigationBar(),
+      floatingActionButton: _selectedIndex == 1 ? FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AddPropertyScreen(agent: _agent!),
+            ),
+          ).then((_) => _loadDashboardData());
+        },
+        backgroundColor: AppColors.primaryColor,
+        child: const Icon(Icons.add_rounded, color: Colors.white),
+      ) : null,
     );
   }
 
@@ -206,7 +268,7 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
       case 1:
         return 'My Properties';
       case 2:
-        return 'Add Property';
+        return 'Messages';
       case 3:
         return 'My Clients';
       case 4:
@@ -223,7 +285,7 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
           // Drawer Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(20, 40, 20, 20),
+            padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [AppColors.primaryColor, AppColors.lightTeal],
@@ -239,115 +301,149 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
                   height: 70,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 12,
-                      ),
-                    ],
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 3),
                   ),
                   child: _agent!.avatarUrl != null
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: Image.network(_agent!.avatarUrl!, fit: BoxFit.cover),
+                      ? ClipOval(
+                          child: Image.network(
+                            _agent!.avatarUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Icon(
+                              Icons.person_rounded,
+                              size: 35,
+                              color: AppColors.primaryColor,
+                            ),
+                          ),
                         )
-                      : const Icon(Icons.person_rounded, size: 35, color: AppColors.primaryColor),
+                      : const Icon(
+                          Icons.person_rounded,
+                          size: 35,
+                          color: AppColors.primaryColor,
+                        ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Text(
-                  _agent!.displayTitle,
+                  _agent!.fullName ?? 'Agent',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.bold,
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  _agent!.email ?? 'No email',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    if (_agent!.verified)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.verified_rounded, color: Colors.white, size: 14),
-                            SizedBox(width: 4),
-                            Text('Verified', style: TextStyle(color: Colors.white, fontSize: 11)),
-                          ],
-                        ),
-                      ),
-                    if (_agent!.rating != null) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.star_rounded, color: Colors.amber, size: 14),
-                            const SizedBox(width: 4),
-                            Text(
-                              _agent!.rating!.toStringAsFixed(1),
-                              style: const TextStyle(color: Colors.white, fontSize: 11),
-                            ),
-                          ],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 51),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.verified_rounded, color: Colors.white, size: 16),
+                      const SizedBox(width: 6),
+                      Text(
+                        _agent!.verified ? 'Verified Agent' : 'Pending Verification',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
                     ],
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _agent!.isAffiliated && _agent!.agencyName != null
-                      ? _agent!.agencyName!
-                      : 'Independent Agent',
-                  style: const TextStyle(color: Colors.white70, fontSize: 13),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  ),
                 ),
               ],
             ),
           ),
-          // Drawer Menu Items
+          // Drawer Items
           Expanded(
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                _buildDrawerItem(0, Icons.dashboard_rounded, 'Dashboard'),
-                _buildDrawerItem(1, Icons.house_rounded, 'My Properties'),
-                _buildDrawerItem(2, Icons.add_home_rounded, 'Add Property'),
-                _buildDrawerItem(3, Icons.people_rounded, 'My Clients'),
-                const Divider(height: 1),
-                _buildDrawerItem(4, Icons.person_rounded, 'My Profile'),
-                _buildDrawerItem(5, Icons.analytics_rounded, 'Performance'),
-                if (!_agent!.isAffiliated)
-                  _buildDrawerItem(6, Icons.business_rounded, 'Join Agency'),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.settings_rounded, color: Colors.grey),
-                  title: const Text('Settings'),
+                const SizedBox(height: 8),
+                _buildDrawerItem(
+                  icon: Icons.dashboard_rounded,
+                  title: 'Dashboard',
+                  isSelected: _selectedIndex == 0,
+                  onTap: () => _onNavItemTapped(0),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.home_work_rounded,
+                  title: 'My Properties',
+                  isSelected: _selectedIndex == 1,
+                  onTap: () => _onNavItemTapped(1),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.message_rounded,
+                  title: 'Messages',
+                  isSelected: _selectedIndex == 2,
+                  onTap: () => _onNavItemTapped(2),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.people_rounded,
+                  title: 'My Clients',
+                  isSelected: _selectedIndex == 3,
+                  onTap: () => _onNavItemTapped(3),
+                ),
+                _buildDrawerItem(
+                  icon: Icons.person_rounded,
+                  title: 'My Profile',
+                  isSelected: _selectedIndex == 4,
+                  onTap: () => _onNavItemTapped(4),
+                ),
+                const Divider(height: 32),
+                _buildDrawerItem(
+                  icon: Icons.analytics_rounded,
+                  title: 'Performance',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.pushNamed(context, AppRoutes.settings);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AgentPerformanceScreen(agent: _agent!),
+                      ),
+                    );
                   },
                 ),
-                ListTile(
-                  leading: const Icon(Icons.help_rounded, color: Colors.grey),
-                  title: const Text('Help & Support'),
+                if (_agent!.agencyId == null)
+                  _buildDrawerItem(
+                    icon: Icons.business_rounded,
+                    title: 'Join Agency',
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const JoinAgencyScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                const Divider(height: 32),
+                _buildDrawerItem(
+                  icon: Icons.settings_rounded,
+                  title: 'Settings',
                   onTap: () {
                     Navigator.pop(context);
-                    Navigator.pushNamed(context, AppRoutes.helpSupport);
+                    Navigator.pushNamed(context, '/settings');
+                  },
+                ),
+                _buildDrawerItem(
+                  icon: Icons.help_rounded,
+                  title: 'Help & Support',
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/help_support');
                   },
                 ),
               ],
@@ -373,178 +469,120 @@ class _AgentDashboardScreenState extends State<AgentDashboardScreen> {
     );
   }
 
-  Widget _buildDrawerItem(int index, IconData icon, String title) {
-    final isSelected = _selectedIndex == index;
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: isSelected ? AppColors.primaryColor : Colors.grey.shade600,
+  Widget _buildDrawerItem({
+    required IconData icon,
+    required String title,
+    bool isSelected = false,
+    required VoidCallback onTap,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: isSelected ? AppColors.primaryColor.withValues(alpha: 25.5) : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
       ),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-          color: isSelected ? AppColors.primaryColor : AppColors.textColor,
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: isSelected ? AppColors.primaryColor : Colors.grey.shade700,
         ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: isSelected ? AppColors.primaryColor : Colors.grey.shade800,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        onTap: onTap,
       ),
-      selected: isSelected,
-      selectedTileColor: AppColors.primaryColor.withValues(alpha: 0.1),
-      onTap: () => _onNavItemTapped(index),
-    );
-  }
-
-  Widget _buildBottomNavigationBar() {
-    return BottomNavigationBar(
-      type: BottomNavigationBarType.fixed,
-      backgroundColor: Colors.white,
-      selectedItemColor: AppColors.primaryColor,
-      unselectedItemColor: Colors.grey.shade600,
-      selectedFontSize: 12,
-      unselectedFontSize: 12,
-      currentIndex: _selectedIndex > 3 ? 0 : _selectedIndex,
-      onTap: (index) {
-        if (index == 2) {
-          // Navigate to Add Property screen
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => AddPropertyScreen(agent: _agent!),
-            ),
-          ).then((_) => _loadAgentData());
-        } else {
-          _onNavItemTapped(index);
-        }
-      },
-      items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.dashboard_rounded),
-          label: 'Dashboard',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.house_rounded),
-          label: 'Properties',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.add_circle_rounded, size: 28),
-          label: 'Add',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.people_rounded),
-          label: 'Clients',
-        ),
-      ],
     );
   }
 
   Widget _buildBody() {
+    if (_agent == null) {
+      return const Center(child: Text('No agent data available'));
+    }
+
     switch (_selectedIndex) {
       case 0:
-        return AgentDashboardOverview(agent: _agent!, onRefresh: _loadAgentData);
+        return _buildDashboard();
       case 1:
         return MyPropertiesScreen(agent: _agent!);
       case 2:
-        return AddPropertyScreen(agent: _agent!);
+        return const MessagesScreen();
       case 3:
         return MyClientsScreen(agent: _agent!);
       case 4:
         return AgentProfileScreen(agent: _agent!, onUpdate: _loadAgentData);
-      case 5:
-        return AgentPerformanceScreen(agent: _agent!);
-      case 6:
-        return const JoinAgencyScreen();
       default:
-        return AgentDashboardOverview(agent: _agent!, onRefresh: _loadAgentData);
-    }
-  }
-}
-
-// ============ AGENT DASHBOARD OVERVIEW ============
-
-class AgentDashboardOverview extends StatefulWidget {
-  final Agent agent;
-  final VoidCallback onRefresh;
-
-  const AgentDashboardOverview({
-    super.key,
-    required this.agent,
-    required this.onRefresh,
-  });
-
-  @override
-  State<AgentDashboardOverview> createState() => _AgentDashboardOverviewState();
-}
-
-class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
-  final _supabaseService = SupabaseService();
-  List<Property> _recentProperties = [];
-  Map<String, dynamic> _stats = {};
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadDashboardData();
-  }
-
-  Future<void> _loadDashboardData() async {
-    setState(() => _isLoading = true);
-    try {
-      final properties = await _supabaseService.getProperties(
-        agentId: widget.agent.id,
-        limit: 5,
-      );
-
-      final allProperties = await _supabaseService.getProperties(
-        agentId: widget.agent.id,
-        limit: 1000,
-      );
-
-      final activeProperties = allProperties.where((p) => p.status == 'active').length;
-      final totalViews = allProperties.fold<int>(0, (sum, p) => sum + p.viewsCount);
-      final totalInquiries = allProperties.fold<int>(0, (sum, p) => sum + p.inquiriesCount);
-
-      setState(() {
-        _recentProperties = properties;
-        _stats = {
-          'total': allProperties.length,
-          'active': activeProperties,
-          'views': totalViews,
-          'inquiries': totalInquiries,
-        };
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
+        return _buildDashboard();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildBottomNavigationBar() {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 12.75),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: _onNavItemTapped,
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: AppColors.primaryColor,
+        unselectedItemColor: Colors.grey,
+        selectedFontSize: 12,
+        unselectedFontSize: 11,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard_rounded),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_work_rounded),
+            label: 'Properties',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.message_rounded),
+            label: 'Messages',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people_rounded),
+            label: 'Clients',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_rounded),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDashboard() {
     return RefreshIndicator(
-      onRefresh: () async {
-        await _loadDashboardData();
-        widget.onRefresh();
-      },
+      onRefresh: _loadDashboardData,
       color: AppColors.primaryColor,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.only(bottom: 24),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildWelcomeCard(),
-              const SizedBox(height: 24),
-              if (!widget.agent.verified) _buildVerificationAlert(),
-              if (!widget.agent.verified) const SizedBox(height: 24),
-              _buildStatsGrid(),
-              const SizedBox(height: 32),
-              _buildQuickActions(),
-              const SizedBox(height: 32),
-              _buildRecentProperties(),
-            ],
-          ),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildWelcomeCard(),
+            const SizedBox(height: 24),
+            _buildStatsGrid(),
+            const SizedBox(height: 24),
+            _buildQuickActions(),
+            const SizedBox(height: 24),
+            _buildRecentProperties(),
+            const SizedBox(height: 20),
+          ],
         ),
       ),
     );
@@ -563,8 +601,8 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primaryColor.withValues(alpha: 0.3),
-            blurRadius: 12,
+            color: AppColors.primaryColor.withValues(alpha: 76.5),
+            blurRadius: 10,
             offset: const Offset(0, 4),
           ),
         ],
@@ -579,71 +617,44 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Welcome back! 👋',
-                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                      'Welcome back,',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      widget.agent.displayTitle,
+                      _agent!.fullName ?? 'Agent',
                       style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 24,
+                        fontSize: 22,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                   ],
                 ),
               ),
-              if (widget.agent.rating != null)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.star_rounded, color: Colors.amber, size: 20),
-                      const SizedBox(width: 6),
-                      Text(
-                        widget.agent.rating!.toStringAsFixed(1),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 51),
+                  shape: BoxShape.circle,
                 ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
           Text(
-            "${widget.agent.yearsOfExperience} years experience • ${widget.agent.reviewsCount ?? 0} reviews",
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.9), fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildVerificationAlert() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.orange.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade200),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.warning_rounded, color: Colors.orange.shade700, size: 24),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Your account is pending verification. You\'ll be notified once approved.',
-              style: TextStyle(color: Colors.orange.shade900, fontSize: 14),
+            'Manage your properties and grow your real estate business',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 229.5),
+              fontSize: 13,
             ),
           ),
         ],
@@ -652,35 +663,43 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
   }
 
   Widget _buildStatsGrid() {
-    if (_isLoading) {
-      return GridView.count(
-        crossAxisCount: 2,
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 1.5,
-        children: List.generate(4, (i) => _buildShimmerCard()),
-      );
-    }
-
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 16,
       crossAxisSpacing: 16,
-      childAspectRatio: 1.5,
+      childAspectRatio: 1.4,
       children: [
-        _buildStatCard('My Properties', '${_stats['total']}', Icons.house_rounded, AppColors.primaryColor),
-        _buildStatCard('Active Listings', '${_stats['active']}', Icons.check_circle_rounded, Colors.green),
-        _buildStatCard('Total Views', '${_stats['views']}', Icons.visibility_rounded, Colors.blue),
-        _buildStatCard('Inquiries', '${_stats['inquiries']}', Icons.message_rounded, Colors.orange),
+        _buildStatCard(
+          'Total Properties',
+          '${_stats['total_properties'] ?? 0}',
+          Icons.home_work_rounded,
+          AppColors.primaryColor,
+        ),
+        _buildStatCard(
+          'Active Listings',
+          '${_stats['active_properties'] ?? 0}',
+          Icons.check_circle_rounded,
+          Colors.green,
+        ),
+        _buildStatCard(
+          'Total Views',
+          '${_stats['total_views'] ?? 0}',
+          Icons.visibility_rounded,
+          Colors.blue,
+        ),
+        _buildStatCard(
+          'Inquiries',
+          '${_stats['total_inquiries'] ?? 0}',
+          Icons.message_rounded,
+          Colors.orange,
+        ),
       ],
     );
   }
 
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
+  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -689,7 +708,7 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 10.2),
             blurRadius: 10,
             offset: const Offset(0, 2),
           ),
@@ -702,7 +721,7 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
+              color: color.withValues(alpha: 25.5),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -712,12 +731,18 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
             children: [
               Text(
                 value,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 4),
               Text(
-                title,
-                style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                ),
               ),
             ],
           ),
@@ -732,9 +757,9 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
       children: [
         const Text(
           'Quick Actions',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         GridView.count(
           crossAxisCount: 2,
           shrinkWrap: true,
@@ -747,18 +772,23 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AddPropertyScreen(agent: widget.agent),
+                  builder: (context) => AddPropertyScreen(agent: _agent!),
+                ),
+              ).then((_) => _loadDashboardData());
+            }),
+            _buildActionButton('View Clients', Icons.people_rounded, AppColors.secondaryColor, () {
+              _onNavItemTapped(3);
+            }),
+            _buildActionButton('Performance', Icons.analytics_rounded, AppColors.accentColor, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AgentPerformanceScreen(agent: _agent!),
                 ),
               );
             }),
-            _buildActionButton('View Clients', Icons.people_rounded, AppColors.secondaryColor, () {
-              // Navigate to clients - handled by parent
-            }),
-            _buildActionButton('Performance', Icons.analytics_rounded, AppColors.accentColor, () {
-              // Navigate to performance - handled by parent
-            }),
             _buildActionButton('Messages', Icons.message_rounded, Colors.grey.shade700, () {
-              Navigator.pushNamed(context, AppRoutes.userMessages);
+              _onNavItemTapped(2);
             }),
           ],
         ),
@@ -773,9 +803,9 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.1),
+          color: color.withValues(alpha: 25.5),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: color.withValues(alpha: 0.2)),
+          border: Border.all(color: color.withValues(alpha: 51)),
         ),
         child: Row(
           children: [
@@ -806,12 +836,10 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
           children: [
             const Text(
               'Recent Properties',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             TextButton(
-              onPressed: () {
-                // Navigate to My Properties screen
-              },
+              onPressed: () => _onNavItemTapped(1),
               child: const Text('View All'),
             ),
           ],
@@ -846,85 +874,114 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
   }
 
   Widget _buildPropertyCard(Property property) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              color: AppColors.backgroundColor,
-              borderRadius: BorderRadius.circular(10),
+    return InkWell(
+      onTap: () {
+        Navigator.pushNamed(context, '/property_detail', arguments: property.id);
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 10.2),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
-            child: const Icon(Icons.home_rounded, color: AppColors.primaryColor, size: 30),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  property.title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  property.locationDisplay,
-                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: property.status == 'active'
-                            ? Colors.green.withValues(alpha: 0.1)
-                            : Colors.grey.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        property.status.toUpperCase(),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: property.status == 'active' ? Colors.green : Colors.grey,
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 70,
+              height: 70,
+              decoration: BoxDecoration(
+                color: AppColors.backgroundColor,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: property.media.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.network(
+                        property.media.first.mediaUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.home_rounded,
+                          color: AppColors.primaryColor,
+                          size: 30,
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Icon(Icons.visibility_rounded, size: 14, color: Colors.grey.shade500),
-                    const SizedBox(width: 4),
-                    Text('${property.viewsCount}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                  ],
+                    )
+                  : const Icon(Icons.home_rounded, color: AppColors.primaryColor, size: 30),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    property.title,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    property.locationDisplay,
+                    style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: property.status == 'active'
+                              ? Colors.green.withValues(alpha: 25.5)
+                              : Colors.grey.withValues(alpha: 25.5),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          property.status.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: property.status == 'active' ? Colors.green : Colors.grey,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(Icons.visibility_rounded, size: 14, color: Colors.grey.shade500),
+                      const SizedBox(width: 4),
+                      Text('${property.viewsCount}', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  property.formattedPrice,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: AppColors.primaryColor,
+                  ),
                 ),
+                const SizedBox(height: 8),
+                Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey.shade400),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                property.formattedPrice,
-                style: const TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey.shade400),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -949,9 +1006,9 @@ class _AgentDashboardOverviewState extends State<AgentDashboardOverview> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => AddPropertyScreen(agent: widget.agent),
+                    builder: (context) => AddPropertyScreen(agent: _agent!),
                   ),
-                );
+                ).then((_) => _loadDashboardData());
               },
               icon: const Icon(Icons.add_rounded),
               label: const Text('Add Property'),

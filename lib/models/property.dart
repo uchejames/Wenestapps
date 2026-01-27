@@ -1,3 +1,5 @@
+import 'property_media.dart';
+
 class Property {
   final int id;
   final String? agentId;
@@ -246,53 +248,5 @@ class Property {
       default:
         return propertyType;
     }
-  }
-}
-
-class PropertyMedia {
-  final String id;
-  final int propertyId;
-  final String fileUrl;
-  final String fileType;
-  final String? caption;
-  final int displayOrder;
-  final bool isPrimary;
-  final DateTime createdAt;
-
-  PropertyMedia({
-    required this.id,
-    required this.propertyId,
-    required this.fileUrl,
-    this.fileType = 'image',
-    this.caption,
-    this.displayOrder = 0,
-    this.isPrimary = false,
-    required this.createdAt,
-  });
-
-  factory PropertyMedia.fromJson(Map<String, dynamic> json) {
-    return PropertyMedia(
-      id: json['id'] as String,
-      propertyId: json['property_id'] as int,
-      fileUrl: json['file_url'] as String,
-      fileType: json['file_type'] as String? ?? 'image',
-      caption: json['caption'] as String?,
-      displayOrder: json['display_order'] as int? ?? 0,
-      isPrimary: json['is_primary'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'property_id': propertyId,
-      'file_url': fileUrl,
-      'file_type': fileType,
-      'caption': caption,
-      'display_order': displayOrder,
-      'is_primary': isPrimary,
-      'created_at': createdAt.toIso8601String(),
-    };
   }
 }

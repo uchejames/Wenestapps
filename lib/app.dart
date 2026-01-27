@@ -26,10 +26,10 @@ import 'screens/shared/language_selection_screen.dart';
 import 'screens/user/user_home_screen.dart';
 import 'screens/user/user_search_screen.dart';
 import 'screens/user/user_agencies_screen.dart';
-import 'screens/user/user_messages_screen.dart';
 import 'screens/user/user_profile_screen.dart';
 import 'screens/user/user_agencies_detail_screen.dart';
 import 'screens/user/property_detail_screen.dart';
+import 'screens/user/user_saved_properties_screen.dart';
 
 // Agent Screens
 import 'screens/agent/agent_registration_screen.dart';
@@ -44,9 +44,11 @@ import 'screens/landlord/landlord_registration_screen.dart';
 import 'screens/landlord/landlord_dashboard_screen.dart';
 
 // Shared Screens - Notifications
+import 'screens/shared/messages_screen.dart';
 import 'screens/shared/notifications_screen.dart';
 import 'screens/shared/notifications_details_screen.dart';
 import 'screens/shared/notifications_settings_screen.dart';
+
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -138,15 +140,18 @@ class MyApp extends StatelessWidget {
         '/faq': (context) => const FAQScreen(),
         '/language_selection': (context) => const LanguageSelectionScreen(),
 
+        // ============ SHARED ROUTES ============
+        '/messages': (context) => const MessagesScreen(),
+
         // ============ USER ROUTES ============
         '/user_home': (context) => const UserHomeScreen(),
         '/user_search': (context) => const UserSearchScreen(),
         '/user_agencies': (context) => const UserAgenciesScreen(),
-        '/user_messages': (context) => const UserMessagesScreen(),
         '/user_profile': (context) => const UserProfileScreen(),
         '/property_detail': (context) => const PropertyDetailScreen(),
         '/agency_detail': (context) => const AgencyDetailScreen(),
-
+        '/user_saved_properties': (context) => const UserSavedPropertiesScreen(),
+        
         // ============ AGENT ROUTES ============
         '/agent_registration': (context) => const AgentRegistrationScreen(),
         '/agent_dashboard': (context) => const AgentDashboardScreen(),

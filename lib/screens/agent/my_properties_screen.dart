@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agent.dart';
 import 'package:wenest/models/property.dart';
+import 'package:wenest/models/property_media.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:wenest/screens/agent/add_property_screen.dart';
+import 'package:wenest/screens/agent/edit_property_screen.dart';
 
 class MyPropertiesScreen extends StatefulWidget {
   final Agent agent;
@@ -23,6 +25,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
   List<Property> _displayedProperties = [];
   bool _isLoading = true;
   String _searchQuery = '';
+  String _sortBy = 'date';
 
   @override
   void initState() {
@@ -47,7 +50,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
   Future<void> _loadProperties() async {
     setState(() => _isLoading = true);
     try {
-      final properties = await _supabaseService.getProperties(
+      final properties = await _supabaseService.getPropertiesWithMedia(
         agentId: widget.agent.id,
         limit: 1000,
       );
@@ -97,8 +100,21 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
       }).toList();
     }
 
-    // Sort by date
-    filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    // Apply sorting
+    switch (_sortBy) {
+      case 'price_low':
+        filtered.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'price_high':
+        filtered.sort((a, b) => b.price.compareTo(a.price));
+        break;
+      case 'views':
+        filtered.sort((a, b) => b.viewsCount.compareTo(a.viewsCount));
+        break;
+      case 'date':
+      default:
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    }
 
     setState(() => _displayedProperties = filtered);
   }
@@ -106,6 +122,13 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
   void _onSearchChanged(String query) {
     setState(() => _searchQuery = query);
     _filterByTab();
+  }
+
+  void _onSortChanged(String? value) {
+    if (value != null) {
+      setState(() => _sortBy = value);
+      _filterByTab();
+    }
   }
 
   Future<void> _deleteProperty(Property property) async {
@@ -165,6 +188,31 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
     }
   }
 
+  Future<void> _togglePropertyStatus(Property property) async {
+    try {
+      final newStatus = property.status == 'active' ? 'inactive' : 'active';
+      await _supabaseService.updateProperty(
+        propertyId: property.id.toString(),
+        status: newStatus,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Property marked as ${newStatus.toUpperCase()}'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadProperties();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error updating property: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   void _showPropertyActions(Property property) {
     showModalBottomSheet(
       context: context,
@@ -193,14 +241,6 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
                 Navigator.pushNamed(context, '/property_detail', arguments: property.id);
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.edit_rounded, color: Colors.blue),
-              title: const Text('Edit Property'),
-              onTap: () {
-                Navigator.pop(context);
-                // Navigate to edit screen
-              },
-            ),
             if (property.status == 'draft')
               ListTile(
                 leading: const Icon(Icons.publish_rounded, color: Colors.green),
@@ -210,15 +250,34 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
                   _publishProperty(property);
                 },
               ),
-            if (property.status == 'active')
+            if (property.status == 'active' || property.status == 'inactive')
               ListTile(
-                leading: const Icon(Icons.pause_circle_rounded, color: Colors.orange),
-                title: const Text('Mark as Inactive'),
+                leading: Icon(
+                  property.status == 'active' ? Icons.pause_circle_rounded : Icons.play_circle_rounded,
+                  color: property.status == 'active' ? Colors.orange : Colors.green,
+                ),
+                title: Text(property.status == 'active' ? 'Mark as Inactive' : 'Mark as Active'),
                 onTap: () {
                   Navigator.pop(context);
-                  // Mark as inactive
+                  _togglePropertyStatus(property);
                 },
               ),
+            ListTile(
+              leading: const Icon(Icons.edit_rounded, color: Colors.blue),
+              title: const Text('Edit Property'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => EditPropertyScreen(
+                      agent: widget.agent,
+                      property: property,
+                    ),
+                  ),
+                ).then((_) => _loadProperties());
+              },
+            ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.delete_rounded, color: Colors.red),
@@ -238,70 +297,88 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Header with Search
+        // Header with search and filters
         Container(
-          color: Colors.white,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 12.75),
+                blurRadius: 5,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
           child: Column(
             children: [
-              // Search Bar
-              TextField(
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Search properties...',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Stats Row
               Row(
                 children: [
-                  Expanded(child: _buildStatChip('Total', _allProperties.length, Icons.home_rounded)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildStatChip('Active', _allProperties.where((p) => p.status == 'active').length, Icons.check_circle_rounded)),
-                  const SizedBox(width: 8),
-                  Expanded(child: _buildStatChip('Draft', _allProperties.where((p) => p.status == 'draft').length, Icons.edit_rounded)),
+                  Expanded(
+                    child: TextField(
+                      onChanged: _onSearchChanged,
+                      decoration: InputDecoration(
+                        hintText: 'Search properties...',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButton<String>(
+                      value: _sortBy,
+                      underline: const SizedBox(),
+                      icon: const Icon(Icons.sort_rounded),
+                      items: const [
+                        DropdownMenuItem(value: 'date', child: Text('Date')),
+                        DropdownMenuItem(value: 'price_low', child: Text('Price: Low-High')),
+                        DropdownMenuItem(value: 'price_high', child: Text('Price: High-Low')),
+                        DropdownMenuItem(value: 'views', child: Text('Most Viewed')),
+                      ],
+                      onChanged: _onSortChanged,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                labelColor: AppColors.primaryColor,
+                unselectedLabelColor: Colors.grey,
+                indicatorColor: AppColors.primaryColor,
+                tabs: [
+                  Tab(text: 'All (${_allProperties.length})'),
+                  Tab(text: 'Active (${_allProperties.where((p) => p.status == 'active').length})'),
+                  Tab(text: 'Draft (${_allProperties.where((p) => p.status == 'draft').length})'),
+                  Tab(text: 'Sold/Rented (${_allProperties.where((p) => p.status == 'sold' || p.status == 'rented').length})'),
+                  Tab(text: 'Inactive (${_allProperties.where((p) => p.status == 'inactive').length})'),
                 ],
               ),
             ],
           ),
         ),
-        // Tabs
-        Container(
-          color: Colors.white,
-          child: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            labelColor: AppColors.primaryColor,
-            unselectedLabelColor: Colors.grey,
-            indicatorColor: AppColors.primaryColor,
-            indicatorWeight: 3,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            tabs: const [
-              Tab(text: 'All'),
-              Tab(text: 'Active'),
-              Tab(text: 'Draft'),
-              Tab(text: 'Sold/Rented'),
-              Tab(text: 'Inactive'),
-            ],
-          ),
-        ),
+        
         // Properties List
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: _loadProperties,
-            color: AppColors.primaryColor,
-            child: _isLoading
-                ? _buildShimmerList()
-                : _displayedProperties.isEmpty
-                    ? _buildEmptyState()
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(20),
+          child: _isLoading
+              ? _buildShimmerList()
+              : _displayedProperties.isEmpty
+                  ? _buildEmptyState()
+                  : RefreshIndicator(
+                      onRefresh: _loadProperties,
+                      color: AppColors.primaryColor,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
                         itemCount: _displayedProperties.length,
                         itemBuilder: (context, index) {
                           return Padding(
@@ -310,50 +387,16 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
                           );
                         },
                       ),
-          ),
+                    ),
         ),
       ],
     );
   }
 
-  Widget _buildStatChip(String label, int count, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.primaryColor.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 16, color: AppColors.primaryColor),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                count.toString(),
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryColor,
-                ),
-              ),
-              Text(
-                label,
-                style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPropertyCard(Property property) {
-    return GestureDetector(
+    return InkWell(
       onTap: () => _showPropertyActions(property),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
@@ -361,7 +404,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
+              color: Colors.black.withValues(alpha: 10.2),
               blurRadius: 10,
               offset: const Offset(0, 2),
             ),
@@ -370,22 +413,30 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Section
+            // Image Section with status badge
             Stack(
               children: [
                 Container(
-                  height: 180,
-                  decoration: BoxDecoration(
+                  height: 200,
+                  decoration: const BoxDecoration(
                     color: AppColors.backgroundColor,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                   ),
-                  child: Center(
-                    child: Icon(
-                      Icons.home_rounded,
-                      color: AppColors.primaryColor.withValues(alpha: 0.3),
-                      size: 60,
-                    ),
-                  ),
+                  child: property.media.isNotEmpty
+                      ? ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          child: Image.network(
+                            property.media.first.mediaUrl,
+                            width: double.infinity,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const Center(
+                              child: Icon(Icons.home_rounded, size: 60, color: AppColors.primaryColor),
+                            ),
+                          ),
+                        )
+                      : const Center(
+                          child: Icon(Icons.home_rounded, size: 60, color: AppColors.primaryColor),
+                        ),
                 ),
                 Positioned(
                   top: 12,
@@ -393,8 +444,8 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(property.status).withValues(alpha: 0.9),
-                      borderRadius: BorderRadius.circular(8),
+                      color: _getStatusColor(property.status),
+                      borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       property.status.toUpperCase(),
@@ -402,26 +453,56 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
                         color: Colors.white,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
-                        letterSpacing: 0.5,
                       ),
                     ),
                   ),
                 ),
-                Positioned(
-                  top: 12,
-                  right: 12,
-                  child: Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8),
-                      ],
+                if (property.isFeatured)
+                  Positioned(
+                    top: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentColor,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'FEATURED',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    child: const Icon(Icons.more_vert_rounded, size: 18),
                   ),
-                ),
+                if (property.media.length > 1)
+                  Positioned(
+                    bottom: 12,
+                    right: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 153),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.image_rounded, color: Colors.white, size: 14),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${property.media.length}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
               ],
             ),
             // Details Section
@@ -579,7 +660,14 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AddPropertyScreen(agent: widget.agent),
+                ),
+              ).then((_) => _loadProperties());
+            },
             icon: const Icon(Icons.add_rounded),
             label: const Text('Add Property'),
             style: ElevatedButton.styleFrom(
@@ -593,7 +681,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
 
   Widget _buildShimmerList() {
     return ListView.builder(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       itemCount: 5,
       itemBuilder: (context, index) {
         return Padding(

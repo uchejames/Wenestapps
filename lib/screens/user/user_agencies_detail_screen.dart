@@ -101,11 +101,14 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
     });
 
     try {
-      // Load all properties for now
-      // TODO: Filter by agency_id when that field is available
-      final properties = await _supabaseService.getProperties(limit: 20);
+      // Load properties filtered by agency_id
+      final properties = await _supabaseService.getProperties(
+        agencyId: agencyId,
+        limit: 100,
+        status: null, // Show all statuses for agency view
+      );
       
-      print('✓ Loaded ${properties.length} properties');
+      print('✓ Loaded ${properties.length} properties for agency');
       
       setState(() {
         _agencyProperties = properties;
@@ -243,7 +246,22 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                         child: _agency!.logoUrl != null
                             ? Image.network(
                                 _agency!.logoUrl!,
+                                width: 90,
+                                height: 90,
                                 fit: BoxFit.cover,
+                                loadingBuilder: (context, child, loadingProgress) {
+                                  if (loadingProgress == null) return child;
+                                  return Center(
+                                    child: CircularProgressIndicator(
+                                      value: loadingProgress.expectedTotalBytes != null
+                                          ? loadingProgress.cumulativeBytesLoaded /
+                                              loadingProgress.expectedTotalBytes!
+                                          : null,
+                                      strokeWidth: 2,
+                                      color: AppColors.primaryColor,
+                                    ),
+                                  );
+                                },
                                 errorBuilder: (context, error, stackTrace) {
                                   return const Icon(
                                     Icons.business_rounded,
@@ -683,7 +701,7 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Property Image
+            // Property Image - UPDATED
             Container(
               width: 120,
               height: 120,
@@ -696,13 +714,50 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
               ),
               child: Stack(
                 children: [
-                  Center(
-                    child: Icon(
-                      Icons.home_rounded,
-                      size: 40,
-                      color: AppColors.primaryColor.withValues(alpha: 0.3),
+                  // Show real image or placeholder
+                  if (property.primaryImageUrl != null)
+                    ClipRRect(
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        bottomLeft: Radius.circular(16),
+                      ),
+                      child: Image.network(
+                        property.primaryImageUrl!,
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              strokeWidth: 2,
+                              color: AppColors.primaryColor,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: Icon(
+                              Icons.home_rounded,
+                              size: 40,
+                              color: AppColors.primaryColor.withValues(alpha: 0.3),
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Icon(
+                        Icons.home_rounded,
+                        size: 40,
+                        color: AppColors.primaryColor.withValues(alpha: 0.3),
+                      ),
                     ),
-                  ),
                   if (property.isFeatured)
                     Positioned(
                       top: 8,
@@ -726,7 +781,7 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                 ],
               ),
             ),
-            // Property Details
+            // Property Details (rest stays the same)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(14),

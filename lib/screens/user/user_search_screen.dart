@@ -477,8 +477,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
   Widget _buildPropertyCard(Property property) {
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, '/property_detail',
-            arguments: property.id);
+        Navigator.pushNamed(context, '/property_detail', arguments: property.id);
       },
       child: Container(
         decoration: BoxDecoration(
@@ -487,7 +486,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(10), // ~0.04
+              color: Colors.black.withAlpha(10),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -496,31 +495,61 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Section
+            // Image Section - UPDATED TO USE REAL IMAGES
             Stack(
               children: [
                 Container(
                   height: 120,
                   decoration: BoxDecoration(
                     color: AppColors.backgroundColor,
-                    borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(16)),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                   ),
-                  child: Center(
-                    child: Icon(
-                      Icons.home_rounded,
-                      size: 40,
-                      color: AppColors.primaryColor.withAlpha(51), // ~0.2
-                    ),
-                  ),
+                  child: property.primaryImageUrl != null
+                      ? ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                          child: Image.network(
+                            property.primaryImageUrl!,
+                            width: double.infinity,
+                            height: 120,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  strokeWidth: 2,
+                                  color: AppColors.primaryColor,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Icon(
+                                  Icons.home_rounded,
+                                  size: 40,
+                                  color: AppColors.primaryColor.withAlpha(51),
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            Icons.home_rounded,
+                            size: 40,
+                            color: AppColors.primaryColor.withAlpha(51),
+                          ),
+                        ),
                 ),
                 // Listing Type Badge
                 Positioned(
                   top: 8,
                   left: 8,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: _getListingTypeColor(property.listingType),
                       borderRadius: BorderRadius.circular(6),
@@ -535,23 +564,20 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     ),
                   ),
                 ),
-                // Featured / Negotiable Badge
+                // Featured Badge
                 if (property.isFeatured)
                   Positioned(
                     top: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: property.isFeatured
-                            ? AppColors.accentColor
-                            : AppColors.secondaryColor,
+                        color: AppColors.accentColor,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text(
-                        property.isFeatured ? 'FEATURED' : 'NEGO',
-                        style: const TextStyle(
+                      child: const Text(
+                        'FEATURED',
+                        style: TextStyle(
                           color: Colors.white,
                           fontSize: 9,
                           fontWeight: FontWeight.bold,
@@ -561,7 +587,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                   ),
               ],
             ),
-            // Details Section
+            // Details Section (rest stays the same)
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.all(10),
@@ -590,8 +616,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     const SizedBox(height: 4),
                     Row(
                       children: [
-                        Icon(Icons.location_on_rounded,
-                            size: 12, color: Colors.grey.shade500),
+                        Icon(Icons.location_on_rounded, size: 12, color: Colors.grey.shade500),
                         const SizedBox(width: 2),
                         Expanded(
                           child: Text(
@@ -608,10 +633,9 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     ),
                     const Spacer(),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryColor.withAlpha(20), // ~0.08
+                        color: AppColors.primaryColor.withAlpha(20),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
@@ -627,22 +651,15 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     Row(
                       children: [
                         if (property.bedrooms != null && property.bedrooms! > 0) ...[
-                          Icon(Icons.bed_rounded,
-                              size: 14, color: Colors.grey.shade600),
+                          Icon(Icons.bed_rounded, size: 14, color: Colors.grey.shade600),
                           const SizedBox(width: 2),
-                          Text('${property.bedrooms}',
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.grey.shade700)),
+                          Text('${property.bedrooms}', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
                           const SizedBox(width: 8),
                         ],
-                        if (property.bathrooms != null &&
-                            property.bathrooms! > 0) ...[
-                          Icon(Icons.bathtub_rounded,
-                              size: 14, color: Colors.grey.shade600),
+                        if (property.bathrooms != null && property.bathrooms! > 0) ...[
+                          Icon(Icons.bathtub_rounded, size: 14, color: Colors.grey.shade600),
                           const SizedBox(width: 2),
-                          Text('${property.bathrooms}',
-                              style: TextStyle(
-                                  fontSize: 11, color: Colors.grey.shade700)),
+                          Text('${property.bathrooms}', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
                         ],
                       ],
                     ),

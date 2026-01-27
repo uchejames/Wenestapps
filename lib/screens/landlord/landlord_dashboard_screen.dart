@@ -6,6 +6,7 @@ import 'package:wenest/screens/landlord/landlord_profile_screen.dart';
 import 'package:wenest/models/landlord.dart';
 import 'package:wenest/models/property.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:wenest/screens/shared/messages_screen.dart';
 
 class LandlordDashboardScreen extends StatefulWidget {
   const LandlordDashboardScreen({super.key});
@@ -387,12 +388,15 @@ class _DashboardContentState extends State<DashboardContent> {
                         },
                       ),
                       _buildActionCard(
-                        'Reports',
-                        Icons.analytics_rounded,
-                        Colors.green,
+                        'Messages',
+                        Icons.message_rounded,
+                        Colors.orange,
                         () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Reports feature coming soon')),
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const MessagesScreen(),
+                            ),
                           );
                         },
                       ),

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:wenest/screens/user/user_search_screen.dart';
 import 'package:wenest/screens/user/user_agencies_screen.dart';
 import 'package:wenest/screens/user/user_profile_screen.dart';
-import 'package:wenest/screens/user/user_messages_screen.dart';
+import 'package:wenest/screens/shared/messages_screen.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/property.dart';
@@ -24,7 +24,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     HomeContent(),
     UserSearchScreen(),
     UserAgenciesScreen(),
-    UserMessagesScreen(),
+    MessagesScreen(),
     UserProfileScreen(),
   ];
 
@@ -587,7 +587,7 @@ class _HomeContentState extends State<HomeContent> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Section
+            // Image Section - UPDATED TO USE REAL IMAGES
             Stack(
               children: [
                 Container(
@@ -596,13 +596,45 @@ class _HomeContentState extends State<HomeContent> {
                     color: AppColors.backgroundColor,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                   ),
-                  child: Center(
-                    child: Icon(
-                      Icons.home_rounded,
-                      color: AppColors.primaryColor.withValues(alpha: 0.2),
-                      size: 50,
-                    ),
-                  ),
+                  child: property.primaryImageUrl != null
+                      ? ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                          child: Image.network(
+                            property.primaryImageUrl!,
+                            width: double.infinity,
+                            height: 160,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, loadingProgress) {
+                              if (loadingProgress == null) return child;
+                              return Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                  strokeWidth: 2,
+                                  color: AppColors.primaryColor,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Icon(
+                                  Icons.home_rounded,
+                                  color: AppColors.primaryColor.withValues(alpha: 0.2),
+                                  size: 50,
+                                ),
+                              );
+                            },
+                          ),
+                        )
+                      : Center(
+                          child: Icon(
+                            Icons.home_rounded,
+                            color: AppColors.primaryColor.withValues(alpha: 0.2),
+                            size: 50,
+                          ),
+                        ),
                 ),
                 if (property.isFeatured)
                   Positioned(
@@ -649,7 +681,7 @@ class _HomeContentState extends State<HomeContent> {
                 ),
               ],
             ),
-            // Details Section
+            // Details Section (rest stays the same)
             Padding(
               padding: const EdgeInsets.all(14),
               child: Column(
@@ -723,6 +755,7 @@ class _HomeContentState extends State<HomeContent> {
     );
   }
 
+
   Widget _buildAgencyCard(Agency agency) {
     return GestureDetector(
       onTap: () {
@@ -730,7 +763,7 @@ class _HomeContentState extends State<HomeContent> {
       },
       child: Container(
         width: 140,
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14), // REDUCED from 16 to 14
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -746,6 +779,7 @@ class _HomeContentState extends State<HomeContent> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            //agency logo
             Container(
               width: 60,
               height: 60,
@@ -753,25 +787,48 @@ class _HomeContentState extends State<HomeContent> {
                 color: AppColors.primaryColor.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: agency.logoUrl != null
-                  ? ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Image.network(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: agency.logoUrl != null
+                    ? Image.network(
                         agency.logoUrl!,
+                        width: 60,
+                        height: 60,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return const Icon(Icons.business_rounded, color: AppColors.primaryColor, size: 30);
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                              strokeWidth: 2,
+                              color: AppColors.primaryColor,
+                            ),
+                          );
                         },
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.business_rounded,
+                            color: AppColors.primaryColor,
+                            size: 30,
+                          );
+                        },
+                      )
+                    : const Icon(
+                        Icons.business_rounded,
+                        color: AppColors.primaryColor,
+                        size: 30,
                       ),
-                    )
-                  : const Icon(Icons.business_rounded, color: AppColors.primaryColor, size: 30),
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 10), // REDUCED from 12 to 10
             Text(
               agency.name,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                fontSize: 13,
+                fontSize: 12, // REDUCED from 13 to 12
                 fontWeight: FontWeight.bold,
                 color: AppColors.textColor,
               ),
@@ -779,9 +836,9 @@ class _HomeContentState extends State<HomeContent> {
               overflow: TextOverflow.ellipsis,
             ),
             if (agency.verified) ...[
-              const SizedBox(height: 6),
+              const SizedBox(height: 4), // REDUCED from 6 to 4
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3), // REDUCED padding
                 decoration: BoxDecoration(
                   color: AppColors.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
@@ -789,12 +846,12 @@ class _HomeContentState extends State<HomeContent> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.verified_rounded, size: 12, color: AppColors.primaryColor),
-                    const SizedBox(width: 4),
+                    Icon(Icons.verified_rounded, size: 10, color: AppColors.primaryColor), // REDUCED from 12 to 10
+                    const SizedBox(width: 3),
                     Text(
                       'Verified',
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: 9, // REDUCED from 10 to 9
                         fontWeight: FontWeight.w600,
                         color: AppColors.primaryColor,
                       ),

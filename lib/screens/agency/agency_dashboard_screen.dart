@@ -11,6 +11,7 @@ import 'package:wenest/screens/agency/manage_agents_screen.dart';
 import 'package:wenest/screens/agency/analytics_screen.dart';
 import 'package:wenest/screens/agency/agency_profile_screen.dart';
 import 'package:wenest/screens/agency/subscription_screen.dart';
+import 'package:wenest/screens/shared/messages_screen.dart';
 
 class AgencyDashboardScreen extends StatefulWidget {
   const AgencyDashboardScreen({super.key});
@@ -766,7 +767,12 @@ class _AgencyDashboardOverviewState extends State<AgencyDashboardOverview> {
                 widget.onNavigate(4);
               }),
               _buildActionButton('Messages', Icons.message_rounded, Colors.grey.shade700, () {
-                Navigator.pushNamed(context, AppRoutes.userMessages);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const MessagesScreen(),
+                  ),
+                );
               }),
             ],
           ),
