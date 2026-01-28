@@ -418,7 +418,7 @@ class _UserAgenciesScreenState extends State<UserAgenciesScreen> {
                   Expanded(
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.phone_rounded,
                           size: 15,
                           color: AppColors.primaryColor,
@@ -449,7 +449,7 @@ class _UserAgenciesScreenState extends State<UserAgenciesScreen> {
                   Expanded(
                     child: Row(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.email_rounded,
                           size: 15,
                           color: AppColors.primaryColor,

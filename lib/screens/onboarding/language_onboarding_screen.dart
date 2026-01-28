@@ -46,7 +46,7 @@ class _LanguageOnboardingScreenState extends State<LanguageOnboardingScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 40),
-                Text(
+                const Text(
                   'Select Language',
                   style: TextStyle(
                     fontSize: 32,

@@ -100,7 +100,7 @@ class _LandlordProfileScreenState extends State<LandlordProfileScreen> {
                 // Header
                 SliverToBoxAdapter(
                   child: Container(
-                    decoration: BoxDecoration(
+                    decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         colors: [AppColors.primaryColor, AppColors.secondaryColor],
                         begin: Alignment.topLeft,
@@ -133,7 +133,7 @@ class _LandlordProfileScreenState extends State<LandlordProfileScreen> {
                                   ? NetworkImage(_profile!.avatarUrl!)
                                   : null,
                               child: _profile?.avatarUrl == null
-                                  ? Icon(
+                                  ? const Icon(
                                       Icons.person_rounded,
                                       size: 50,
                                       color: AppColors.primaryColor,
@@ -514,7 +514,7 @@ class _LandlordProfileScreenState extends State<LandlordProfileScreen> {
         SliverToBoxAdapter(
           child: Container(
             height: 300,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               gradient: LinearGradient(
                 colors: [AppColors.primaryColor, AppColors.secondaryColor],
                 begin: Alignment.topLeft,

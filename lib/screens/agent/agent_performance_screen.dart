@@ -133,7 +133,7 @@ class _AgentPerformanceScreenState extends State<AgentPerformanceScreen> {
                   _buildStatCard('Inquiries', '${_stats['total_inquiries']}', Icons.message_rounded, Colors.teal),
                   _buildStatCard(
                     'Avg. Views',
-                    '${((_stats['avg_views'] ?? 0) as num).toDouble().toStringAsFixed(1)}',
+                    ((_stats['avg_views'] ?? 0) as num).toDouble().toStringAsFixed(1),
                     Icons.trending_up_rounded,
                     Colors.indigo,
                   ),

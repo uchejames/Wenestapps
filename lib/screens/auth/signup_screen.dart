@@ -142,9 +142,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       const SizedBox(height: 16),
 
                       // Tagline - made larger and more elegant
-                      Text(
+                      const Text(
                         AppStrings.appTagline,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w500,
                           color: Colors.white,
@@ -168,7 +168,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             children: [
                               Text(
                                 _getUserTypeTitle(),
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                   color: AppColors.textColor,

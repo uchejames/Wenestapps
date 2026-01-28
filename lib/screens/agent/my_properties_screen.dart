@@ -3,7 +3,6 @@ import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agent.dart';
 import 'package:wenest/models/property.dart';
-import 'package:wenest/models/property_media.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:wenest/screens/agent/add_property_screen.dart';
 import 'package:wenest/screens/agent/edit_property_screen.dart';

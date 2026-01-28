@@ -187,9 +187,9 @@ class _LandlordPropertiesScreenState extends State<LandlordPropertiesScreen> wit
             children: [
               Container(
                 height: 180,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.backgroundColor,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                 ),
                 child: Center(
                   child: Icon(

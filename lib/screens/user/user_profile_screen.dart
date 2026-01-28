@@ -603,7 +603,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   String _getUserTypeDisplay() {
-    switch (_profile?.userType?.toLowerCase()) {
+    switch (_profile?.userType.toLowerCase()) {
       case 'agent':
         return 'Real Estate Agent';
       case 'agency':
@@ -616,7 +616,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   IconData _getUserTypeIcon() {
-    switch (_profile?.userType?.toLowerCase()) {
+    switch (_profile?.userType.toLowerCase()) {
       case 'agent':
         return Icons.badge_rounded;
       case 'agency':

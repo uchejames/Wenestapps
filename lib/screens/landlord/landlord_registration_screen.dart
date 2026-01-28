@@ -324,8 +324,8 @@ class _LandlordRegistrationScreenState extends State<LandlordRegistrationScreen>
                                 fontSize: 14,
                                 color: Colors.grey.shade800,
                               ),
-                              children: [
-                                const TextSpan(text: 'I agree to the '),
+                              children: const [
+                                TextSpan(text: 'I agree to the '),
                                 TextSpan(
                                   text: 'Terms and Conditions',
                                   style: TextStyle(
@@ -333,7 +333,7 @@ class _LandlordRegistrationScreenState extends State<LandlordRegistrationScreen>
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),
-                                const TextSpan(text: ' and '),
+                                TextSpan(text: ' and '),
                                 TextSpan(
                                   text: 'Privacy Policy',
                                   style: TextStyle(

@@ -19,7 +19,7 @@ class MyClientsScreen extends StatefulWidget {
 class _MyClientsScreenState extends State<MyClientsScreen> {
   final _searchController = TextEditingController();
   final List<Map<String, dynamic>> _clients = []; // Placeholder
-  bool _isLoading = false;
+  final bool _isLoading = false;
 
   @override
   void dispose() {

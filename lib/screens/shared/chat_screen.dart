@@ -6,7 +6,6 @@ import 'package:wenest/models/message.dart';
 import 'package:wenest/models/profile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:flutter/foundation.dart';
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;

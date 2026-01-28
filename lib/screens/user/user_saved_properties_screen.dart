@@ -227,9 +227,9 @@ class _UserSavedPropertiesScreenState extends State<UserSavedPropertiesScreen> {
               Container(
                 width: 120,
                 height: 120,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: AppColors.backgroundColor,
-                  borderRadius: const BorderRadius.only(
+                  borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(16),
                     bottomLeft: Radius.circular(16),
                   ),

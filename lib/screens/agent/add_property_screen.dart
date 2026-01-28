@@ -42,7 +42,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   int _currentStep = 0;
 
   // Media files
-  List<XFile> _selectedImages = [];
+  final List<XFile> _selectedImages = [];
   XFile? _selectedVideo;
   bool _isUploadingMedia = false;
 
@@ -82,9 +82,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         }
       });
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking images: $e'), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking images: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -92,12 +94,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     try {
       final XFile? video = await _imagePicker.pickVideo(
         source: ImageSource.gallery,
-        maxDuration: const Duration(minutes: 2), // 2 minute limit
+        maxDuration: const Duration(minutes: 2),
       );
       
       if (video != null) {
         final fileSize = await File(video.path).length();
-        if (fileSize > 100 * 1024 * 1024) { // 100MB limit
+        if (fileSize > 100 * 1024 * 1024) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
@@ -113,9 +115,11 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error picking video: $e'), backgroundColor: Colors.red),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking video: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -132,30 +136,56 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   }
 
   Future<void> _submitProperty({bool publish = false}) async {
-    if (!_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please fill all required fields'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
+    // Validate current step first
+    if (_currentStep == 0) {
+      if (_titleController.text.trim().isEmpty ||
+          _descriptionController.text.trim().isEmpty ||
+          _priceController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill all required fields in Basic Information'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
     }
 
-    if (_selectedImages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please add at least one image'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+    if (_currentStep == 1) {
+      if (_addressController.text.trim().isEmpty ||
+          _cityAreaController.text.trim().isEmpty ||
+          _stateController.text.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill all required fields in Property Details'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+    }
+
+    if (_currentStep == 2) {
+      if (_selectedImages.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please add at least one image'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+    }
+
+    // Only proceed with submission on final step
+    if (_currentStep < 3) {
+      setState(() => _currentStep++);
       return;
     }
 
     setState(() => _isLoading = true);
 
     try {
-      // Create property first
       final propertyId = await _supabaseService.createProperty(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
@@ -177,7 +207,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         negotiable: _negotiable,
       );
 
-      // Upload images
       setState(() => _isUploadingMedia = true);
       for (int i = 0; i < _selectedImages.length; i++) {
         await _supabaseService.uploadPropertyMedia(
@@ -188,7 +217,6 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         );
       }
 
-      // Upload video if selected
       if (_selectedVideo != null) {
         await _supabaseService.uploadPropertyMedia(
           propertyId: propertyId,
@@ -230,106 +258,217 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.white,
       appBar: AppBar(
         title: const Text('Add New Property'),
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.grey.shade900,
+        elevation: 0,
       ),
-      body: Form(
-        key: _formKey,
-        child: Stepper(
-          currentStep: _currentStep,
-          onStepContinue: () {
-            if (_currentStep < 3) {
-              // Validate current step before moving
-              if (_validateCurrentStep()) {
-                setState(() => _currentStep++);
-              }
-            }
-          },
-          onStepCancel: () {
-            if (_currentStep > 0) {
-              setState(() => _currentStep--);
-            }
-          },
-          controlsBuilder: (context, details) {
-            return Padding(
-              padding: const EdgeInsets.only(top: 16),
-              child: Row(
-                children: [
-                  if (_currentStep < 3)
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : details.onStepContinue,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: const Text('Continue'),
-                      ),
-                    ),
-                  if (_currentStep == 3) ...[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _isLoading ? null : () => _submitProperty(publish: false),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: _isLoading && !_isUploadingMedia
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Text('Save as Draft'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : () => _submitProperty(publish: true),
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        child: _isLoading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Text('Publish'),
-                      ),
-                    ),
-                  ],
-                  if (_currentStep > 0) ...[
-                    const SizedBox(width: 12),
-                    OutlinedButton(
-                      onPressed: _isLoading ? null : details.onStepCancel,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                      ),
-                      child: const Text('Back'),
-                    ),
-                  ],
-                ],
+      body: SafeArea(
+        child: Column(
+          children: [
+            _buildProgressIndicator(),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Form(
+                  key: _formKey,
+                  child: _buildStepContent(),
+                ),
               ),
-            );
-          },
-          steps: [
-            Step(
-              title: const Text('Basic Information'),
-              isActive: _currentStep >= 0,
-              state: _currentStep > 0 ? StepState.complete : StepState.indexed,
-              content: _buildBasicInfoStep(),
             ),
-            Step(
-              title: const Text('Property Details'),
-              isActive: _currentStep >= 1,
-              state: _currentStep > 1 ? StepState.complete : StepState.indexed,
-              content: _buildPropertyDetailsStep(),
+            _buildBottomNavigation(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProgressIndicator() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          bottom: BorderSide(color: Colors.grey.shade200),
+        ),
+      ),
+      child: Row(
+        children: List.generate(4, (index) {
+          final isActive = index == _currentStep;
+          final isCompleted = index < _currentStep;
+          
+          return Expanded(
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: isCompleted || isActive
+                              ? AppColors.primaryColor
+                              : Colors.grey.shade200,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: isCompleted
+                              ? const Icon(
+                                  Icons.check_rounded,
+                                  color: Colors.white,
+                                  size: 16,
+                                )
+                              : Text(
+                                  '${index + 1}',
+                                  style: TextStyle(
+                                    color: isActive ? Colors.white : Colors.grey.shade600,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _getStepTitle(index),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                          color: isActive
+                              ? AppColors.primaryColor
+                              : Colors.grey.shade600,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                if (index < 3)
+                  Container(
+                    width: 20,
+                    height: 2,
+                    margin: const EdgeInsets.only(bottom: 18),
+                    color: index < _currentStep
+                        ? AppColors.primaryColor
+                        : Colors.grey.shade200,
+                  ),
+              ],
             ),
-            Step(
-              title: const Text('Location & Media'),
-              isActive: _currentStep >= 2,
-              state: _currentStep > 2 ? StepState.complete : StepState.indexed,
-              content: _buildLocationAndMediaStep(),
-            ),
-            Step(
-              title: const Text('Review & Publish'),
-              isActive: _currentStep >= 3,
-              state: StepState.indexed,
-              content: _buildReviewStep(),
+          );
+        }),
+      ),
+    );
+  }
+
+  String _getStepTitle(int index) {
+    switch (index) {
+      case 0:
+        return 'Basic';
+      case 1:
+        return 'Details';
+      case 2:
+        return 'Media';
+      case 3:
+        return 'Review';
+      default:
+        return '';
+    }
+  }
+
+  Widget _buildStepContent() {
+    switch (_currentStep) {
+      case 0:
+        return _buildBasicInfoStep();
+      case 1:
+        return _buildPropertyDetailsStep();
+      case 2:
+        return _buildMediaStep();
+      case 3:
+        return _buildReviewStep();
+      default:
+        return const SizedBox();
+    }
+  }
+
+  Widget _buildBottomNavigation() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Colors.grey.shade200),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            if (_currentStep > 0)
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _isLoading ? null : () {
+                    setState(() => _currentStep--);
+                  },
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(color: AppColors.primaryColor),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Back'),
+                ),
+              ),
+            if (_currentStep > 0) const SizedBox(width: 12),
+            Expanded(
+              flex: _currentStep == 0 ? 1 : 2,
+              child: _currentStep < 3
+                  ? ElevatedButton(
+                      onPressed: _isLoading ? null : () => _submitProperty(publish: false),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      child: const Text('Continue'),
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ElevatedButton.icon(
+                          onPressed: _isLoading ? null : () => _submitProperty(publish: true),
+                          icon: _isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.publish_rounded, size: 20),
+                          label: Text(_isLoading ? 'Publishing...' : 'Publish Property'),
+                          style: ElevatedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 46),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextButton(
+                          onPressed: _isLoading ? null : () => _submitProperty(publish: false),
+                          child: const Text('Save as Draft'),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -337,92 +476,46 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     );
   }
 
-  bool _validateCurrentStep() {
-    switch (_currentStep) {
-      case 0:
-        if (_titleController.text.trim().isEmpty) {
-          _showError('Please enter property title');
-          return false;
-        }
-        if (_descriptionController.text.trim().isEmpty) {
-          _showError('Please enter property description');
-          return false;
-        }
-        if (_priceController.text.trim().isEmpty) {
-          _showError('Please enter property price');
-          return false;
-        }
-        return true;
-      case 1:
-        // Property details validation
-        return true;
-      case 2:
-        if (_addressController.text.trim().isEmpty) {
-          _showError('Please enter property address');
-          return false;
-        }
-        if (_cityAreaController.text.trim().isEmpty) {
-          _showError('Please enter city/area');
-          return false;
-        }
-        if (_stateController.text.trim().isEmpty) {
-          _showError('Please enter state');
-          return false;
-        }
-        if (_selectedImages.isEmpty) {
-          _showError('Please add at least one image');
-          return false;
-        }
-        return true;
-      default:
-        return true;
-    }
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.orange),
-    );
-  }
-
   Widget _buildBasicInfoStep() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Property Title', style: TextStyle(fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _titleController,
-          decoration: const InputDecoration(
-            hintText: 'e.g., Modern 3 Bedroom Apartment',
-            prefixIcon: Icon(Icons.title_rounded),
-          ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Title is required';
-            }
-            return null;
-          },
+        const Text(
+          'Basic Information',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
         
-        const Text('Description', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text('Property Title *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _titleController,
+          decoration: InputDecoration(
+            hintText: 'e.g., Modern 3 Bedroom Apartment',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        const Text('Description *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextFormField(
           controller: _descriptionController,
-          maxLines: 5,
-          decoration: const InputDecoration(
-            hintText: 'Describe the property in detail...',
-            alignLabelWithHint: true,
+          maxLines: 4,
+          decoration: InputDecoration(
+            hintText: 'Describe the property...',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            contentPadding: const EdgeInsets.all(14),
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Description is required';
-            }
-            return null;
-          },
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         
         Row(
           children: [
@@ -430,39 +523,44 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Property Type', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('Property Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: _propertyType,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.home_rounded),
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                     items: const [
                       DropdownMenuItem(value: 'apartment', child: Text('Apartment')),
                       DropdownMenuItem(value: 'house', child: Text('House')),
                       DropdownMenuItem(value: 'duplex', child: Text('Duplex')),
-                      DropdownMenuItem(value: 'villa', child: Text('Villa')),
+                      DropdownMenuItem(value: 'bungalow', child: Text('Bungalow')),
+                      DropdownMenuItem(value: 'studio', child: Text('Studio')),
                       DropdownMenuItem(value: 'land', child: Text('Land')),
                       DropdownMenuItem(value: 'commercial', child: Text('Commercial')),
-                      DropdownMenuItem(value: 'office', child: Text('Office Space')),
-                      DropdownMenuItem(value: 'shop', child: Text('Shop')),
                     ],
                     onChanged: (value) => setState(() => _propertyType = value!),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Listing Type', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('Listing Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     value: _listingType,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.sell_rounded),
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
                     items: const [
                       DropdownMenuItem(value: 'rent', child: Text('For Rent')),
@@ -476,9 +574,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         
-        const Text('Price (₦)', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text('Price (₦) *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextFormField(
           controller: _priceController,
@@ -486,25 +584,19 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           decoration: InputDecoration(
             hintText: 'Enter amount',
-            prefixIcon: const Icon(Icons.attach_money_rounded),
-            suffix: Text(
-              _listingType == 'rent' ? '/year' : _listingType == 'shortlet' ? '/night' : '',
-              style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
             ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Price is required';
-            }
-            return null;
-          },
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 10),
         
         CheckboxListTile(
-          title: const Text('Price is negotiable'),
           value: _negotiable,
-          onChanged: (value) => setState(() => _negotiable = value ?? false),
+          onChanged: (value) => setState(() => _negotiable = value!),
+          title: const Text('Price is negotiable', style: TextStyle(fontSize: 14)),
           contentPadding: EdgeInsets.zero,
           controlAffinity: ListTileControlAffinity.leading,
         ),
@@ -516,59 +608,65 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'Property Details',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 20),
+        
+        const Text('Address *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: _addressController,
+          decoration: InputDecoration(
+            hintText: 'e.g., 123 Main Street',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
         Row(
           children: [
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Bedrooms', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('City/Area *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   TextFormField(
-                    controller: _bedroomsController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      hintText: '0',
-                      prefixIcon: Icon(Icons.bed_rounded),
+                    controller: _cityAreaController,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., Ikeja',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Bathrooms', style: TextStyle(fontWeight: FontWeight.w600)),
+                  const Text('State *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   TextFormField(
-                    controller: _bathroomsController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      hintText: '0',
-                      prefixIcon: Icon(Icons.bathtub_rounded),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Toilets', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _toiletsController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      hintText: '0',
-                      prefixIcon: Icon(Icons.wc_rounded),
+                    controller: _stateController,
+                    decoration: InputDecoration(
+                      hintText: 'e.g., Lagos',
+                      hintStyle: TextStyle(color: Colors.grey.shade400),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
                     ),
                   ),
                 ],
@@ -578,44 +676,31 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         ),
         const SizedBox(height: 20),
         
+        const Text(
+          'Room Configuration',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Square Meters', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _squareMetersController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      hintText: '0',
-                      prefixIcon: Icon(Icons.square_foot_rounded),
-                      suffixText: 'm²',
-                    ),
-                  ),
-                ],
-              ),
+              child: _buildNumberField('Bedrooms', _bedroomsController, Icons.bed_rounded),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Parking Spaces', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _parkingSpacesController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      hintText: '0',
-                      prefixIcon: Icon(Icons.local_parking_rounded),
-                    ),
-                  ),
-                ],
-              ),
+              child: _buildNumberField('Bathrooms', _bathroomsController, Icons.bathtub_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _buildNumberField('Toilets', _toiletsController, Icons.wc_rounded),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _buildNumberField('Parking', _parkingSpacesController, Icons.local_parking_rounded),
             ),
           ],
         ),
@@ -624,284 +709,209 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         Row(
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Year Built', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _yearBuiltController,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: const InputDecoration(
-                      hintText: 'YYYY',
-                      prefixIcon: Icon(Icons.calendar_today_rounded),
-                    ),
-                  ),
-                ],
-              ),
+              child: _buildNumberField('Size (m²)', _squareMetersController, Icons.square_foot_rounded, isDecimal: true),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Furnishing', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _furnishingStatus,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.chair_rounded),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'unfurnished', child: Text('Unfurnished')),
-                      DropdownMenuItem(value: 'semi-furnished', child: Text('Semi-Furnished')),
-                      DropdownMenuItem(value: 'fully-furnished', child: Text('Fully Furnished')),
-                    ],
-                    onChanged: (value) => setState(() => _furnishingStatus = value!),
-                  ),
-                ],
-              ),
+              child: _buildNumberField('Year Built', _yearBuiltController, Icons.calendar_today_rounded),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
+        
+        const Text('Furnishing Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: _furnishingStatus,
+          decoration: InputDecoration(
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+          items: const [
+            DropdownMenuItem(value: 'unfurnished', child: Text('Unfurnished')),
+            DropdownMenuItem(value: 'semi-furnished', child: Text('Semi-Furnished')),
+            DropdownMenuItem(value: 'fully-furnished', child: Text('Fully Furnished')),
+          ],
+          onChanged: (value) => setState(() => _furnishingStatus = value!),
         ),
       ],
     );
   }
 
-  Widget _buildLocationAndMediaStep() {
+  Widget _buildNumberField(String label, TextEditingController controller, IconData icon, {bool isDecimal = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Address', style: TextStyle(fontWeight: FontWeight.w600)),
+        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         TextFormField(
-          controller: _addressController,
-          decoration: const InputDecoration(
-            hintText: 'Enter full address',
-            prefixIcon: Icon(Icons.location_on_rounded),
+          controller: controller,
+          keyboardType: TextInputType.numberWithOptions(decimal: isDecimal),
+          inputFormatters: [
+            if (!isDecimal) FilteringTextInputFormatter.digitsOnly,
+            if (isDecimal) FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+          ],
+          decoration: InputDecoration(
+            hintText: '0',
+            hintStyle: TextStyle(color: Colors.grey.shade400),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
-          validator: (value) {
-            if (value == null || value.trim().isEmpty) {
-              return 'Address is required';
-            }
-            return null;
-          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMediaStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Property Media',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 20),
         
         Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('City/Area', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _cityAreaController,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g., Lekki',
-                      prefixIcon: Icon(Icons.location_city_rounded),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'City/Area is required';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('State', style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _stateController,
-                    decoration: const InputDecoration(
-                      hintText: 'e.g., Lagos',
-                      prefixIcon: Icon(Icons.map_rounded),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'State is required';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        
-        const Divider(),
-        const SizedBox(height: 16),
-        
-        // Images Section
-        Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Property Images', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            Text('${_selectedImages.length}/10', style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+            const Text('Property Images *', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+            Text(
+              '${_selectedImages.length}/10',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+            ),
           ],
         ),
         const SizedBox(height: 12),
         
-        if (_selectedImages.isEmpty)
-          Container(
-            height: 150,
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300, width: 2, style: BorderStyle.solid),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: InkWell(
-              onTap: _pickImages,
-              borderRadius: BorderRadius.circular(12),
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.add_photo_alternate_rounded, size: 48, color: Colors.grey.shade400),
-                    const SizedBox(height: 8),
-                    Text('Add Images', style: TextStyle(color: Colors.grey.shade600)),
-                    const SizedBox(height: 4),
-                    Text('(Maximum 10 images)', style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-                  ],
-                ),
-              ),
-            ),
-          )
-        else
-          Column(
-            children: [
-              SizedBox(
-                height: 120,
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _selectedImages.length + 1,
-                  itemBuilder: (context, index) {
-                    if (index == _selectedImages.length) {
-                      if (_selectedImages.length < 10) {
-                        return InkWell(
-                          onTap: _pickImages,
-                          child: Container(
-                            width: 120,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              border: Border.all(color: Colors.grey.shade300, width: 2),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.add_rounded, color: Colors.grey.shade400),
-                                Text('Add More', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-                      return const SizedBox();
-                    }
-                    
-                    return Stack(
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          margin: const EdgeInsets.only(right: 8),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                            image: DecorationImage(
-                              image: FileImage(File(_selectedImages[index].path)),
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 4,
-                          right: 12,
-                          child: InkWell(
-                            onTap: () => _removeImage(index),
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(Icons.close_rounded, color: Colors.white, size: 16),
-                            ),
-                          ),
-                        ),
-                        if (index == 0)
-                          Positioned(
-                            bottom: 4,
-                            left: 4,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: AppColors.primaryColor,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: const Text(
-                                'Cover',
-                                style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ],
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
           ),
+          itemCount: _selectedImages.length + 1,
+          itemBuilder: (context, index) {
+            if (index == _selectedImages.length) {
+              return InkWell(
+                onTap: _selectedImages.length < 10 ? _pickImages : null,
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: _selectedImages.length < 10 ? AppColors.primaryColor : Colors.grey.shade300,
+                      width: 2,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    color: _selectedImages.length < 10 
+                        ? AppColors.primaryColor.withValues(alpha: 0.05) 
+                        : Colors.grey.shade100,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_photo_alternate_rounded,
+                        size: 32,
+                        color: _selectedImages.length < 10 ? AppColors.primaryColor : Colors.grey,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Add',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: _selectedImages.length < 10 ? AppColors.primaryColor : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+            
+            return Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.file(
+                    File(_selectedImages[index].path),
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                Positioned(
+                  top: 4,
+                  right: 4,
+                  child: InkWell(
+                    onTap: () => _removeImage(index),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                    ),
+                  ),
+                ),
+                if (index == 0)
+                  Positioned(
+                    bottom: 4,
+                    left: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryColor,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'Cover',
+                        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      
+        const SizedBox(height: 20),
         
-        const SizedBox(height: 24),
-        
-        // Video Section
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text('Property Video (Optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Text('Property Video (Optional)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
             if (_selectedVideo != null)
-              TextButton.icon(
+              TextButton(
                 onPressed: _removeVideo,
-                icon: const Icon(Icons.delete_rounded, size: 18),
-                label: const Text('Remove'),
-                style: TextButton.styleFrom(foregroundColor: Colors.red),
+                child: const Text('Remove', style: TextStyle(color: Colors.red)),
               ),
           ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Max 2 minutes, 100MB',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
         ),
         const SizedBox(height: 12),
         
         if (_selectedVideo == null)
           InkWell(
             onTap: _pickVideo,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(10),
             child: Container(
               height: 100,
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300, width: 2, style: BorderStyle.solid),
-                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade300, width: 2),
+                borderRadius: BorderRadius.circular(10),
               ),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.videocam_rounded, size: 40, color: Colors.grey.shade400),
+                    Icon(Icons.videocam_rounded, size: 36, color: Colors.grey.shade400),
                     const SizedBox(height: 8),
                     Text('Add Video', style: TextStyle(color: Colors.grey.shade600)),
                   ],
@@ -911,23 +921,23 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           )
         else
           Container(
-            height: 100,
+            height: 90,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.primaryColor),
             ),
             child: Row(
               children: [
                 Container(
-                  width: 80,
-                  height: 80,
+                  width: 70,
+                  height: 70,
                   decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withOpacity(0.1),
+                    color: AppColors.primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Icon(Icons.play_circle_filled_rounded, size: 40, color: AppColors.primaryColor),
+                  child: const Icon(Icons.play_circle_filled_rounded, size: 36, color: AppColors.primaryColor),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -937,7 +947,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                     children: [
                       const Text(
                         'Video Added',
-                        style: TextStyle(fontWeight: FontWeight.w600),
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -962,16 +972,17 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       children: [
         const Text(
           'Review Your Property',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         
         if (_isUploadingMedia)
           Container(
             padding: const EdgeInsets.all(16),
+            margin: const EdgeInsets.only(bottom: 20),
             decoration: BoxDecoration(
-              color: AppColors.primaryColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
+              color: AppColors.primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
             ),
             child: const Row(
               children: [
@@ -984,58 +995,41 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             ),
           ),
         
-        _buildReviewItem('Title', _titleController.text),
-        _buildReviewItem('Description', _descriptionController.text),
-        _buildReviewItem('Property Type', _propertyType.toUpperCase()),
-        _buildReviewItem('Listing Type', _listingType.toUpperCase()),
-        _buildReviewItem('Price', '₦${_priceController.text}${_negotiable ? ' (Negotiable)' : ''}'),
-        
-        if (_bedroomsController.text.isNotEmpty || _bathroomsController.text.isNotEmpty || _toiletsController.text.isNotEmpty)
-          _buildReviewItem(
-            'Rooms',
-            '${_bedroomsController.text.isEmpty ? '0' : _bedroomsController.text} Bed • '
-            '${_bathroomsController.text.isEmpty ? '0' : _bathroomsController.text} Bath • '
-            '${_toiletsController.text.isEmpty ? '0' : _toiletsController.text} Toilet'
-          ),
-        
-        if (_squareMetersController.text.isNotEmpty)
-          _buildReviewItem('Size', '${_squareMetersController.text} m²'),
-        
-        if (_parkingSpacesController.text.isNotEmpty)
-          _buildReviewItem('Parking', '${_parkingSpacesController.text} space(s)'),
-        
-        if (_yearBuiltController.text.isNotEmpty)
-          _buildReviewItem('Year Built', _yearBuiltController.text),
-        
-        _buildReviewItem('Furnishing', _furnishingStatus.toUpperCase()),
-        _buildReviewItem('Address', _addressController.text),
-        _buildReviewItem('Location', '${_cityAreaController.text}, ${_stateController.text}'),
-        
-        const Divider(height: 32),
-        
-        _buildReviewItem('Images', '${_selectedImages.length} image(s)'),
-        if (_selectedVideo != null)
-          _buildReviewItem('Video', '1 video added'),
-        
-        const SizedBox(height: 16),
-        
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Colors.blue.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.blue.shade200),
+            color: Colors.grey.shade50,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade200),
           ),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.info_outline_rounded, color: Colors.blue.shade700),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'You can save as draft to continue editing later, or publish to make it live.',
-                  style: TextStyle(fontSize: 13, color: Colors.blue.shade700),
+              _buildReviewItem('Title', _titleController.text),
+              _buildReviewItem('Description', _descriptionController.text),
+              _buildReviewItem('Property Type', _propertyType.toUpperCase()),
+              _buildReviewItem('Listing Type', _listingType.toUpperCase()),
+              _buildReviewItem('Price', '₦${_priceController.text}${_negotiable ? ' (Negotiable)' : ''}'),
+              
+              if (_bedroomsController.text.isNotEmpty || _bathroomsController.text.isNotEmpty)
+                _buildReviewItem(
+                  'Rooms',
+                  '${_bedroomsController.text.isEmpty ? '0' : _bedroomsController.text} Bed • '
+                  '${_bathroomsController.text.isEmpty ? '0' : _bathroomsController.text} Bath'
                 ),
-              ),
+              
+              if (_squareMetersController.text.isNotEmpty)
+                _buildReviewItem('Size', '${_squareMetersController.text} m²'),
+              
+              _buildReviewItem('Furnishing', _furnishingStatus.toUpperCase()),
+              _buildReviewItem('Address', _addressController.text),
+              _buildReviewItem('Location', '${_cityAreaController.text}, ${_stateController.text}'),
+              
+              const Divider(height: 20),
+              
+              _buildReviewItem('Images', '${_selectedImages.length} image(s)'),
+              if (_selectedVideo != null)
+                _buildReviewItem('Video', '1 video added'),
             ],
           ),
         ),
@@ -1045,21 +1039,21 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   Widget _buildReviewItem(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 100,
+            width: 90,
             child: Text(
               label,
-              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700),
+              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13),
             ),
           ),
           Expanded(
             child: Text(
               value,
-              style: const TextStyle(fontSize: 14),
+              style: const TextStyle(fontSize: 13),
             ),
           ),
         ],

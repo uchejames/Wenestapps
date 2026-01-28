@@ -217,7 +217,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          value: _propertyType,
+          initialValue: _propertyType,
           decoration: const InputDecoration(
             labelText: 'Property Type *',
             prefixIcon: Icon(Icons.home_rounded),
@@ -235,7 +235,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          value: _listingType,
+          initialValue: _listingType,
           decoration: const InputDecoration(
             labelText: 'Listing Type *',
             prefixIcon: Icon(Icons.sell_rounded),
@@ -356,7 +356,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         ),
         const SizedBox(height: 16),
         DropdownButtonFormField<String>(
-          value: _furnishingStatus,
+          initialValue: _furnishingStatus,
           decoration: const InputDecoration(
             labelText: 'Furnishing Status',
             prefixIcon: Icon(Icons.chair_rounded),

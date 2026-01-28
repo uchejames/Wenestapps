@@ -183,9 +183,9 @@ class _SplashScreenState extends State<SplashScreen>
                       opacity: _taglineFade,
                       child: Transform.translate(
                         offset: Offset(0, _taglineSlide.value),
-                        child: Text(
+                        child: const Text(
                           AppStrings.appTagline,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 20,
                             fontWeight: FontWeight.w500,

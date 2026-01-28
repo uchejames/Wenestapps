@@ -80,9 +80,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 16),
 
                       // Larger, elegant tagline
-                      Text(
+                      const Text(
                         AppStrings.appTagline,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w500,
                           color: Colors.white,

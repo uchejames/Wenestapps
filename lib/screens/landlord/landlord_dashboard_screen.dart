@@ -176,7 +176,7 @@ class _DashboardContentState extends State<DashboardContent> {
           SliverToBoxAdapter(
             child: Container(
               padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
+              decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [AppColors.primaryColor, AppColors.secondaryColor],
                   begin: Alignment.topLeft,
@@ -581,7 +581,7 @@ class _DashboardContentState extends State<DashboardContent> {
                 const SizedBox(height: 4),
                 Text(
                   property.formattedPrice,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     color: AppColors.primaryColor,
                     fontWeight: FontWeight.w600,

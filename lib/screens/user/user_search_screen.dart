@@ -500,9 +500,9 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
               children: [
                 Container(
                   height: 120,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.backgroundColor,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
                   ),
                   child: property.primaryImageUrl != null
                       ? ClipRRect(
@@ -640,7 +640,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                       ),
                       child: Text(
                         property.propertyTypeDisplay,
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 10,
                           fontWeight: FontWeight.w600,
                           color: AppColors.primaryColor,

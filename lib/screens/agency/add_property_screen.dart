@@ -49,7 +49,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   int _currentStep = 0;
 
   // Image management
-  List<PropertyImageData> _images = [];
+  final List<PropertyImageData> _images = [];
   int? _primaryImageIndex;
   bool _isUploadingImages = false;
 
@@ -117,9 +117,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
             file: File(photo.path),
             isPrimary: _images.isEmpty,
           ));
-          if (_primaryImageIndex == null) {
-            _primaryImageIndex = 0;
-          }
+          _primaryImageIndex ??= 0;
         });
       }
     } catch (e) {
@@ -391,7 +389,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         const SizedBox(height: 16),
         
         DropdownButtonFormField<String>(
-          value: _propertyType,
+          initialValue: _propertyType,
           decoration: const InputDecoration(
             labelText: 'Property Type *',
             prefixIcon: Icon(Icons.home_rounded),
@@ -410,7 +408,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         const SizedBox(height: 16),
         
         DropdownButtonFormField<String>(
-          value: _listingType,
+          initialValue: _listingType,
           decoration: const InputDecoration(
             labelText: 'Listing Type *',
             prefixIcon: Icon(Icons.sell_rounded),
@@ -532,7 +530,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         const SizedBox(height: 16),
         
         DropdownButtonFormField<String>(
-          value: _furnishingStatus,
+          initialValue: _furnishingStatus,
           decoration: const InputDecoration(
             labelText: 'Furnishing Status',
             prefixIcon: Icon(Icons.chair_rounded),

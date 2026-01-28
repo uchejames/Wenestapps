@@ -228,7 +228,7 @@ class _HomeContentState extends State<HomeContent> {
                                       ? NetworkImage(_profile!.avatarUrl!)
                                       : null,
                                   child: _profile?.avatarUrl == null
-                                      ? Icon(
+                                      ? const Icon(
                                           Icons.person_rounded,
                                           color: AppColors.primaryColor,
                                           size: 26,
@@ -328,7 +328,7 @@ class _HomeContentState extends State<HomeContent> {
                               ),
                             ),
                           ),
-                          Icon(
+                          const Icon(
                             Icons.tune_rounded,
                             color: AppColors.primaryColor,
                             size: 22,
@@ -592,9 +592,9 @@ class _HomeContentState extends State<HomeContent> {
               children: [
                 Container(
                   height: 160,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: AppColors.backgroundColor,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                   ),
                   child: property.primaryImageUrl != null
                       ? ClipRRect(
@@ -843,11 +843,11 @@ class _HomeContentState extends State<HomeContent> {
                   color: AppColors.primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(6),
                 ),
-                child: Row(
+                child: const Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(Icons.verified_rounded, size: 10, color: AppColors.primaryColor), // REDUCED from 12 to 10
-                    const SizedBox(width: 3),
+                    SizedBox(width: 3),
                     Text(
                       'Verified',
                       style: TextStyle(

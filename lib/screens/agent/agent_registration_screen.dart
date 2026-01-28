@@ -22,7 +22,7 @@ class _AgentRegistrationScreenState extends State<AgentRegistrationScreen> {
   
   bool _isLoading = false;
   bool _hasAgencyAffiliation = false;
-  List<String> _selectedSpecializations = [];
+  final List<String> _selectedSpecializations = [];
   
   final List<String> _availableSpecializations = [
     'Residential Sales',
@@ -364,7 +364,7 @@ class _AgentRegistrationScreenState extends State<AgentRegistrationScreen> {
                       _hasAgencyAffiliation = value;
                     });
                   },
-                  activeColor: AppColors.primaryColor,
+                  activeThumbColor: AppColors.primaryColor,
                 ),
                 
                 if (_hasAgencyAffiliation) ...[
