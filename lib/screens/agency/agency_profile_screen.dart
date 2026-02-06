@@ -101,223 +101,215 @@ class _AgencyProfileScreenState extends State<AgencyProfileScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // Header Card
+            // Clean White Header
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [AppColors.primaryColor, AppColors.lightTeal],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primaryColor.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(24, 40, 24, 32),
               child: Column(
                 children: [
+                  // Logo/Avatar Section
                   Stack(
                     children: [
                       Container(
                         width: 100,
                         height: 100,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withValues(alpha: 0.2), blurRadius: 12),
-                          ],
+                          border: Border.all(color: Colors.grey.shade200, width: 2),
                         ),
                         child: widget.agency.logoUrl != null
                             ? ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
+                                borderRadius: BorderRadius.circular(18),
                                 child: Image.network(widget.agency.logoUrl!, fit: BoxFit.cover),
                               )
-                            : const Icon(Icons.business, size: 50, color: AppColors.primaryColor),
+                            : Icon(Icons.business, size: 50, color: Colors.grey.shade400),
                       ),
                       Positioned(
                         bottom: 0,
                         right: 0,
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryColor,
                             shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2),
                           ),
-                          child: const Icon(Icons.camera_alt_rounded, size: 20, color: AppColors.primaryColor),
+                          child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
+                  
+                  // Agency Name
                   Text(
                     widget.agency.name,
                     style: const TextStyle(
-                      color: Colors.white,
+                      color: AppColors.textColor,
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
                     ),
                     textAlign: TextAlign.center,
                   ),
+                  
+                  // Verified Badge
                   if (widget.agency.verified) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(20),
+                        color: AppColors.primaryColor.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(24),
+                        border: Border.all(
+                          color: AppColors.primaryColor.withValues(alpha: 0.2),
+                        ),
                       ),
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.verified_rounded, color: Colors.white, size: 16),
+                          Icon(Icons.verified_rounded, color: AppColors.primaryColor, size: 16),
                           SizedBox(width: 6),
-                          Text('Verified Agency', style: TextStyle(color: Colors.white, fontSize: 12)),
+                          Text(
+                            'Verified Agency',
+                            style: TextStyle(
+                              color: AppColors.primaryColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                   ],
+                  
+                  // Edit Button
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        setState(() => _isEditing = !_isEditing);
+                      },
+                      icon: Icon(_isEditing ? Icons.close_rounded : Icons.edit_rounded, size: 20),
+                      label: Text(_isEditing ? 'Cancel' : 'Edit Profile'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        foregroundColor: AppColors.primaryColor,
+                        side: BorderSide(color: AppColors.primaryColor.withValues(alpha: 0.3)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
             
-            // Form
-            Padding(
+            const SizedBox(height: 8),
+            
+            // Form Content
+            Container(
+              color: Colors.white,
               padding: const EdgeInsets.all(24),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Agency Information',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        IconButton(
-                          onPressed: () {
-                            setState(() => _isEditing = !_isEditing);
-                          },
-                          icon: Icon(_isEditing ? Icons.close_rounded : Icons.edit_rounded),
-                          color: AppColors.primaryColor,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 20),
+                    // Agency Information Section
+                    _buildSectionTitle('Agency Information'),
+                    const SizedBox(height: 16),
                     
-                    TextFormField(
+                    _buildTextField(
                       controller: _nameController,
+                      label: 'Agency Name',
+                      icon: Icons.business_rounded,
                       enabled: _isEditing,
-                      decoration: const InputDecoration(
-                        labelText: 'Agency Name',
-                        prefixIcon: Icon(Icons.business_rounded),
-                      ),
                       validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     
-                    TextFormField(
+                    _buildTextField(
                       controller: _descriptionController,
+                      label: 'Description',
+                      icon: Icons.description_rounded,
                       enabled: _isEditing,
                       maxLines: 4,
-                      decoration: const InputDecoration(
-                        labelText: 'Description',
-                        prefixIcon: Icon(Icons.description_rounded),
-                        alignLabelWithHint: true,
-                      ),
                     ),
-                    const SizedBox(height: 24),
                     
-                    const Text(
-                      'Contact Information',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    const SizedBox(height: 32),
+                    
+                    // Contact Information Section
+                    _buildSectionTitle('Contact Information'),
                     const SizedBox(height: 16),
                     
-                    TextFormField(
+                    _buildTextField(
                       controller: _emailController,
+                      label: 'Email',
+                      icon: Icons.email_rounded,
                       enabled: _isEditing,
                       keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email_rounded),
-                      ),
                       validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     
-                    TextFormField(
+                    _buildTextField(
                       controller: _phoneController,
+                      label: 'Phone',
+                      icon: Icons.phone_rounded,
                       enabled: _isEditing,
                       keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(
-                        labelText: 'Phone',
-                        prefixIcon: Icon(Icons.phone_rounded),
-                      ),
                       validator: (v) => v?.isEmpty ?? true ? 'Required' : null,
                     ),
                     const SizedBox(height: 16),
                     
-                    TextFormField(
+                    _buildTextField(
                       controller: _websiteController,
+                      label: 'Website',
+                      icon: Icons.web_rounded,
                       enabled: _isEditing,
                       keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                        labelText: 'Website',
-                        prefixIcon: Icon(Icons.web_rounded),
-                      ),
                     ),
-                    const SizedBox(height: 24),
                     
-                    const Text(
-                      'Office Address',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
+                    const SizedBox(height: 32),
+                    
+                    // Office Address Section
+                    _buildSectionTitle('Office Address'),
                     const SizedBox(height: 16),
                     
-                    TextFormField(
+                    _buildTextField(
                       controller: _addressController,
+                      label: 'Street Address',
+                      icon: Icons.location_on_rounded,
                       enabled: _isEditing,
-                      maxLines: 3,
-                      decoration: const InputDecoration(
-                        labelText: 'Address',
-                        prefixIcon: Icon(Icons.location_on_rounded),
-                        alignLabelWithHint: true,
-                      ),
+                      maxLines: 2,
                     ),
                     const SizedBox(height: 16),
                     
                     Row(
                       children: [
                         Expanded(
-                          child: TextFormField(
+                          child: _buildTextField(
                             controller: _cityController,
+                            label: 'City',
+                            icon: Icons.location_city_rounded,
                             enabled: _isEditing,
-                            decoration: const InputDecoration(
-                              labelText: 'City',
-                              prefixIcon: Icon(Icons.location_city_rounded),
-                            ),
                           ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
-                          child: TextFormField(
+                          child: _buildTextField(
                             controller: _stateController,
+                            label: 'State',
+                            icon: Icons.map_rounded,
                             enabled: _isEditing,
-                            decoration: const InputDecoration(
-                              labelText: 'State',
-                              prefixIcon: Icon(Icons.map_rounded),
-                            ),
                           ),
                         ),
                       ],
@@ -331,14 +323,29 @@ class _AgencyProfileScreenState extends State<AgencyProfileScreen> {
                           onPressed: _isLoading ? null : _saveChanges,
                           style: ElevatedButton.styleFrom(
                             padding: const EdgeInsets.symmetric(vertical: 16),
+                            backgroundColor: AppColors.primaryColor,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            elevation: 0,
                           ),
                           child: _isLoading
                               ? const SizedBox(
                                   height: 20,
                                   width: 20,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
                                 )
-                              : const Text('Save Changes', style: TextStyle(fontSize: 16)),
+                              : const Text(
+                                  'Save Changes',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
@@ -348,6 +355,65 @@ class _AgencyProfileScreenState extends State<AgencyProfileScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: AppColors.textColor,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required bool enabled,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      enabled: enabled,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      validator: validator,
+      style: TextStyle(
+        color: enabled ? AppColors.textColor : Colors.grey.shade600,
+      ),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(
+          icon,
+          color: enabled ? AppColors.primaryColor : Colors.grey.shade400,
+          size: 22,
+        ),
+        filled: true,
+        fillColor: enabled ? Colors.grey.shade50 : Colors.grey.shade100,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primaryColor, width: 2),
+        ),
+        disabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade200),
+        ),
+        alignLabelWithHint: maxLines > 1,
       ),
     );
   }

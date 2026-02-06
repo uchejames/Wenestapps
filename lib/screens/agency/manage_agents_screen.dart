@@ -49,6 +49,7 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Remove Agent'),
         content: Text('Remove ${agent.displayName ?? 'Agent'} from your agency?'),
         actions: [
@@ -58,7 +59,10 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             child: const Text('Remove'),
           ),
         ],
@@ -90,18 +94,25 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('Invite Agent'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Send an invitation to an agent to join your agency.'),
-            const SizedBox(height: 16),
+            Text(
+              'Send an invitation to an agent to join your agency.',
+              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            ),
+            const SizedBox(height: 20),
             TextField(
               controller: emailController,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 labelText: 'Agent Email',
-                prefixIcon: Icon(Icons.email_rounded),
-                border: OutlineInputBorder(),
+                prefixIcon: const Icon(Icons.email_rounded),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               keyboardType: TextInputType.emailAddress,
             ),
@@ -120,6 +131,10 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
                 const SnackBar(content: Text('Invitation sent!'), backgroundColor: Colors.green),
               );
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryColor,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
             child: const Text('Send Invite'),
           ),
         ],
@@ -130,40 +145,59 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       body: Column(
         children: [
-          // Header
+          // Clean Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor.withValues(alpha: 0.05),
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            color: Colors.white,
+            padding: const EdgeInsets.fromLTRB(20, 40, 20, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Column(
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Team Members',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Team Members',
+                            style: TextStyle(
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textColor,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            '${_agents.length} active ${_agents.length == 1 ? 'agent' : 'agents'}',
+                            style: TextStyle(
+                              color: Colors.grey.shade600,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${_agents.length} active agents',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                    ElevatedButton.icon(
+                      onPressed: _showInviteDialog,
+                      icon: const Icon(Icons.person_add_rounded, size: 20),
+                      label: const Text('Invite'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 0,
+                      ),
                     ),
                   ],
-                ),
-                ElevatedButton.icon(
-                  onPressed: _showInviteDialog,
-                  icon: const Icon(Icons.person_add_rounded, size: 20),
-                  label: const Text('Invite'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  ),
                 ),
               ],
             ),
@@ -178,14 +212,12 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
                   ? _buildShimmerList()
                   : _agents.isEmpty
                       ? _buildEmptyState()
-                      : ListView.builder(
+                      : ListView.separated(
                           padding: const EdgeInsets.all(20),
                           itemCount: _agents.length,
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
                           itemBuilder: (context, index) {
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 16),
-                              child: _buildAgentCard(_agents[index]),
-                            );
+                            return _buildAgentCard(_agents[index]);
                           },
                         ),
             ),
@@ -197,18 +229,11 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
 
   Widget _buildAgentCard(Agent agent) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         children: [
@@ -216,17 +241,21 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
             children: [
               // Avatar
               Container(
-                width: 60,
-                height: 60,
+                width: 56,
+                height: 56,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryColor.withValues(alpha: 0.1),
+                  color: AppColors.primaryColor.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: AppColors.primaryColor.withValues(alpha: 0.2),
-                    width: 2,
+                    color: AppColors.primaryColor.withValues(alpha: 0.15),
+                    width: 1.5,
                   ),
                 ),
-                child: const Icon(Icons.person_rounded, color: AppColors.primaryColor, size: 30),
+                child: const Icon(
+                  Icons.person_rounded,
+                  color: AppColors.primaryColor,
+                  size: 28,
+                ),
               ),
               const SizedBox(width: 14),
               
@@ -243,12 +272,13 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
+                              color: AppColors.textColor,
                             ),
                           ),
                         ),
                         if (agent.verified)
                           Container(
-                            padding: const EdgeInsets.all(4),
+                            padding: const EdgeInsets.all(5),
                             decoration: BoxDecoration(
                               color: AppColors.primaryColor.withValues(alpha: 0.1),
                               shape: BoxShape.circle,
@@ -256,26 +286,67 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
                             child: const Icon(
                               Icons.verified_rounded,
                               color: AppColors.primaryColor,
-                              size: 14,
+                              size: 15,
                             ),
                           ),
                       ],
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
                       '${agent.yearsOfExperience} years experience',
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 13,
+                      ),
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
-                        Icon(Icons.star_rounded, size: 14, color: Colors.amber.shade600),
-                        const SizedBox(width: 4),
-                        const Text('4.8', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                        const SizedBox(width: 12),
-                        Icon(Icons.home_work_rounded, size: 14, color: Colors.grey.shade500),
-                        const SizedBox(width: 4),
-                        const Text('23 Properties', style: TextStyle(fontSize: 12)),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade50,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star_rounded, size: 13, color: Colors.amber.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                '4.8',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.amber.shade900,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.home_work_rounded, size: 13, color: Colors.grey.shade700),
+                              const SizedBox(width: 4),
+                              Text(
+                                '23',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.grey.shade700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ],
                     ),
                   ],
@@ -283,9 +354,9 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          const Divider(),
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
           
           // Actions
           Row(
@@ -296,22 +367,30 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
                     // View agent profile
                   },
                   icon: const Icon(Icons.visibility_rounded, size: 18),
-                  label: const Text('View Profile'),
+                  label: const Text('View'),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    foregroundColor: AppColors.primaryColor,
+                    side: BorderSide(color: AppColors.primaryColor.withValues(alpha: 0.3)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 10),
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _removeAgent(agent),
                   icon: const Icon(Icons.person_remove_rounded, size: 18),
                   label: const Text('Remove'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red),
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    foregroundColor: Colors.red.shade600,
+                    side: BorderSide(color: Colors.red.shade200),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
               ),
@@ -324,50 +403,76 @@ class _ManageAgentsScreenState extends State<ManageAgentsScreen> {
 
   Widget _buildEmptyState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.people_outline_rounded, size: 100, color: Colors.grey.shade300),
-          const SizedBox(height: 20),
-          const Text(
-            'No agents yet',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.grey),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Invite agents to join your agency',
-            style: TextStyle(color: Colors.grey.shade500),
-          ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _showInviteDialog,
-            icon: const Icon(Icons.person_add_rounded),
-            label: const Text('Invite Agent'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.people_outline_rounded,
+                size: 80,
+                color: Colors.grey.shade400,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            const Text(
+              'No agents yet',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Invite agents to join your agency and start\nbuilding your team',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 14,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 28),
+            ElevatedButton.icon(
+              onPressed: _showInviteDialog,
+              icon: const Icon(Icons.person_add_rounded, size: 20),
+              label: const Text('Invite Agent'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildShimmerList() {
-    return ListView.builder(
+    return ListView.separated(
       padding: const EdgeInsets.all(20),
       itemCount: 4,
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Shimmer.fromColors(
-            baseColor: Colors.grey.shade200,
-            highlightColor: Colors.grey.shade50,
-            child: Container(
-              height: 140,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
+        return Shimmer.fromColors(
+          baseColor: Colors.grey.shade200,
+          highlightColor: Colors.grey.shade50,
+          child: Container(
+            height: 160,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
             ),
           ),
         );

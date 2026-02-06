@@ -134,8 +134,8 @@ class _AgencyDashboardScreenState extends State<AgencyDashboardScreen> {
       key: _scaffoldKey,
       appBar: AppBar(
         title: Text(_getAppBarTitle()),
-        backgroundColor: AppColors.primaryColor,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        foregroundColor: AppColors.primaryColor,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.menu_rounded),
