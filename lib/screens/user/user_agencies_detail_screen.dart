@@ -5,6 +5,7 @@ import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agency.dart';
 import 'package:wenest/models/property.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 
 class AgencyDetailScreen extends StatefulWidget {
   const AgencyDetailScreen({super.key});
@@ -13,13 +14,41 @@ class AgencyDetailScreen extends StatefulWidget {
   State<AgencyDetailScreen> createState() => _AgencyDetailScreenState();
 }
 
-class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTickerProviderStateMixin {
+class _AgencyDetailScreenState extends State<AgencyDetailScreen>
+    with SingleTickerProviderStateMixin {
   final _supabaseService = SupabaseService();
   Agency? _agency;
   List<Property> _agencyProperties = [];
   bool _isLoading = true;
   bool _isLoadingProperties = true;
   late TabController _tabController;
+  final PageController _promoController = PageController();
+
+  // Mock promotional banners - Replace with actual data from database later
+  final List<Map<String, dynamic>> _promos = [
+    {
+      'title': 'Zero Processing Fees',
+      'subtitle': 'For New Listings',
+      'badge': 'EXCLUSIVE DEAL',
+      'color': const Color(0xFF6366F1),
+      'gradient': const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+      ),
+    },
+    {
+      'title': 'Free Property Consultation',
+      'subtitle': 'With Expert Agents',
+      'badge': 'SUMMER SPECIAL',
+      'color': const Color(0xFFEC4899),
+      'gradient': const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [Color(0xFFEC4899), Color(0xFFF97316)],
+      ),
+    },
+  ];
 
   @override
   void initState() {
@@ -30,6 +59,7 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
   @override
   void dispose() {
     _tabController.dispose();
+    _promoController.dispose();
     super.dispose();
   }
 
@@ -37,56 +67,57 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
   void didChangeDependencies() {
     super.didChangeDependencies();
     final agencyId = ModalRoute.of(context)!.settings.arguments;
-    print('Agency ID from route: $agencyId (${agencyId.runtimeType})');
-    
+    debugPrint('Agency ID from route: $agencyId (${agencyId.runtimeType})');
+
     if (agencyId is int) {
       _loadAgencyData(agencyId.toString());
     } else if (agencyId is String) {
       _loadAgencyData(agencyId);
     } else {
-      print('⚠️ Invalid agency ID type: ${agencyId.runtimeType}');
+      debugPrint('⚠️ Invalid agency ID type: ${agencyId.runtimeType}');
     }
   }
 
   Future<void> _loadAgencyData(String agencyId) async {
-    print('=== Loading agency data for ID: $agencyId ===');
-    
+    debugPrint('=== Loading agency data for ID: $agencyId ===');
+
     setState(() {
       _isLoading = true;
     });
 
     try {
       final agency = await _supabaseService.getAgencyById(agencyId);
-      
+
       if (agency == null) {
-        print('⚠️ Agency not found for ID: $agencyId');
+        debugPrint('⚠️ Agency not found for ID: $agencyId');
       } else {
-        print('✓ Agency loaded: ${agency.name}');
+        debugPrint('✓ Agency loaded: ${agency.name}');
       }
-      
+
       setState(() {
         _agency = agency;
         _isLoading = false;
       });
-      
+
       if (agency != null) {
         _loadAgencyProperties(agencyId);
       }
     } catch (e, stackTrace) {
-      print('❌ Error loading agency: $e');
-      print('Stack trace: $stackTrace');
-      
+      debugPrint('❌ Error loading agency: $e');
+      debugPrint('Stack trace: $stackTrace');
+
       setState(() {
         _isLoading = false;
       });
-      
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error loading agency: $e'),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -94,28 +125,27 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
   }
 
   Future<void> _loadAgencyProperties(String agencyId) async {
-    print('Loading properties for agency: $agencyId');
-    
+    debugPrint('Loading properties for agency: $agencyId');
+
     setState(() {
       _isLoadingProperties = true;
     });
 
     try {
-      // Load properties filtered by agency_id
       final properties = await _supabaseService.getProperties(
         agencyId: agencyId,
         limit: 100,
-        status: null, // Show all statuses for agency view
+        status: null,
       );
-      
-      print('✓ Loaded ${properties.length} properties for agency');
-      
+
+      debugPrint('✓ Loaded ${properties.length} properties for agency');
+
       setState(() {
         _agencyProperties = properties;
         _isLoadingProperties = false;
       });
     } catch (e) {
-      print('Error loading properties: $e');
+      debugPrint('Error loading properties: $e');
       setState(() {
         _isLoadingProperties = false;
       });
@@ -136,223 +166,474 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
     }
   }
 
-  Future<void> _openWebsite(String website) async {
-    final url = Uri.parse(website.startsWith('http') ? website : 'https://$website');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: const Color(0xFFF8F9FA),
       body: _isLoading
           ? _buildShimmerLoading()
           : _agency == null
               ? _buildErrorState()
               : _buildAgencyDetails(),
-      bottomNavigationBar: _isLoading || _agency == null ? null : _buildBottomBar(),
     );
   }
 
   Widget _buildAgencyDetails() {
-    return NestedScrollView(
-      headerSliverBuilder: (context, innerBoxIsScrolled) {
-        return [
-          SliverAppBar(
-            expandedHeight: 220,
-            floating: false,
-            pinned: true,
-            backgroundColor: Colors.white,
-            elevation: 0,
-            leading: Container(
-              margin: const EdgeInsets.all(8),
+    return CustomScrollView(
+      slivers: [
+        // Modern App Bar
+        _buildSliverAppBar(),
+        
+        // Agency Header Info
+        _buildAgencyHeader(),
+        
+        // Promotional Banners
+        if (_promos.isNotEmpty) _buildPromoBanners(),
+        
+        // Quick Stats
+        _buildQuickStats(),
+        
+        // Tab Bar
+        _buildTabBar(),
+        
+        // Tab Content
+        _buildTabContent(),
+      ],
+    );
+  }
+
+  Widget _buildSliverAppBar() {
+    return SliverAppBar(
+      expandedHeight: 0,
+      floating: true,
+      pinned: true,
+      backgroundColor: Colors.white,
+      elevation: 0,
+      leading: Container(
+        margin: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: IconButton(
+          icon: const Icon(Icons.arrow_back, color: AppColors.textColor),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      actions: [
+        Container(
+          margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.share_outlined, color: AppColors.textColor),
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Share functionality coming soon'),
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+      title: Text(
+        'AGENCY PROFILE',
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 1.2,
+          color: Colors.grey.shade600,
+        ),
+      ),
+      centerTitle: true,
+    );
+  }
+
+  Widget _buildAgencyHeader() {
+    return SliverToBoxAdapter(
+      child: Container(
+        margin: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // Agency Logo
+            Container(
+              width: 80,
+              height: 80,
               decoration: BoxDecoration(
                 color: Colors.white,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.grey.shade200, width: 1),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 8,
+                    color: Colors.black.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.primaryColor),
-                onPressed: () => Navigator.pop(context),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: _agency!.logoUrl != null
+                    ? Image.network(
+                        _agency!.logoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return const Icon(
+                            Icons.business_rounded,
+                            color: AppColors.primaryColor,
+                            size: 40,
+                          );
+                        },
+                      )
+                    : const Icon(
+                        Icons.business_rounded,
+                        color: AppColors.primaryColor,
+                        size: 40,
+                      ),
               ),
             ),
-            actions: [
-              Container(
-                margin: const EdgeInsets.only(right: 8, top: 8, bottom: 8),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.1),
-                      blurRadius: 8,
-                    ),
-                  ],
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.share_rounded, color: AppColors.primaryColor),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: const Text('Share functionality coming soon'),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            const SizedBox(width: 16),
+            // Agency Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          _agency!.name,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textColor,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    );
-                  },
+                      if (_agency!.verified) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: AppColors.primaryColor,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined,
+                          size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          _agency!.city != null && _agency!.state != null
+                              ? '${_agency!.city}, ${_agency!.state}'
+                              : _agency!.state ?? 'Location not specified',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPromoBanners() {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 12, 20, 12),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Special Offers',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textColor,
+                  ),
+                ),
+                Text(
+                  'VIEW ALL',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primaryColor,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(
+            height: 160,
+            child: PageView.builder(
+              controller: _promoController,
+              itemCount: _promos.length,
+              padEnds: false,
+              itemBuilder: (context, index) {
+                final promo = _promos[index];
+                return Container(
+                  margin: EdgeInsets.only(
+                    left: index == 0 ? 16 : 8,
+                    right: index == _promos.length - 1 ? 16 : 8,
+                  ),
+                  child: _buildPromoCard(promo),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Page Indicator
+          Center(
+            child: SmoothPageIndicator(
+              controller: _promoController,
+              count: _promos.length,
+              effect: ExpandingDotsEffect(
+                dotWidth: 8,
+                dotHeight: 8,
+                activeDotColor: AppColors.primaryColor,
+                dotColor: Colors.grey.shade300,
+                expansionFactor: 3,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPromoCard(Map<String, dynamic> promo) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: promo['gradient'] as LinearGradient,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: (promo['color'] as Color).withValues(alpha: 0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              promo['badge'] as String,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                promo['title'] as String,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  height: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                promo['subtitle'] as String,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.9),
+                  fontSize: 15,
                 ),
               ),
             ],
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      AppColors.primaryColor,
-                      AppColors.lightTeal,
-                    ],
-                  ),
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 40),
-                    // Logo
-                    Container(
-                      width: 90,
-                      height: 90,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 20,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(20),
-                        child: _agency!.logoUrl != null
-                            ? Image.network(
-                                _agency!.logoUrl!,
-                                width: 90,
-                                height: 90,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (context, child, loadingProgress) {
-                                  if (loadingProgress == null) return child;
-                                  return Center(
-                                    child: CircularProgressIndicator(
-                                      value: loadingProgress.expectedTotalBytes != null
-                                          ? loadingProgress.cumulativeBytesLoaded /
-                                              loadingProgress.expectedTotalBytes!
-                                          : null,
-                                      strokeWidth: 2,
-                                      color: AppColors.primaryColor,
-                                    ),
-                                  );
-                                },
-                                errorBuilder: (context, error, stackTrace) {
-                                  return const Icon(
-                                    Icons.business_rounded,
-                                    color: AppColors.primaryColor,
-                                    size: 45,
-                                  );
-                                },
-                              )
-                            : const Icon(
-                                Icons.business_rounded,
-                                color: AppColors.primaryColor,
-                                size: 45,
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Name
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              _agency!.name,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                              ),
-                              textAlign: TextAlign.center,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (_agency!.verified) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.verified_rounded,
-                                color: AppColors.primaryColor,
-                                size: 20,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickStats() {
+    return SliverToBoxAdapter(
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: _buildStatItem(
+                '${_agencyProperties.length}',
+                'PROPERTIES',
+                Icons.home_work_outlined,
               ),
             ),
+            Container(
+              width: 1,
+              height: 40,
+              color: Colors.grey.shade200,
+            ),
+            Expanded(
+              child: _buildStatItem(
+                '4.9 ⭐',
+                'RATING',
+                Icons.star_outline,
+              ),
+            ),
+            Container(
+              width: 1,
+              height: 40,
+              color: Colors.grey.shade200,
+            ),
+            Expanded(
+              child: _buildStatItem(
+                '15+',
+                'AGENTS',
+                Icons.people_outline,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String value, String label, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, size: 24, color: AppColors.primaryColor),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textColor,
           ),
-        ];
-      },
-      body: Column(
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade600,
+            letterSpacing: 0.5,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabBar() {
+    return SliverPersistentHeader(
+      pinned: true,
+      delegate: _StickyTabBarDelegate(
+        TabBar(
+          controller: _tabController,
+          labelColor: AppColors.primaryColor,
+          unselectedLabelColor: Colors.grey.shade600,
+          indicatorColor: AppColors.primaryColor,
+          indicatorWeight: 3,
+          labelStyle: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 15,
+          ),
+          tabs: const [
+            Tab(text: 'About'),
+            Tab(text: 'Properties'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent() {
+    return SliverFillRemaining(
+      child: TabBarView(
+        controller: _tabController,
         children: [
-          // Tab Bar
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              labelColor: AppColors.primaryColor,
-              unselectedLabelColor: Colors.grey.shade600,
-              indicatorColor: AppColors.primaryColor,
-              indicatorWeight: 3,
-              labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-              tabs: const [
-                Tab(text: 'About'),
-                Tab(text: 'Properties'),
-              ],
-            ),
-          ),
-          // Tab Views
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                _buildAboutTab(),
-                _buildPropertiesTab(),
-              ],
-            ),
-          ),
+          _buildAboutTab(),
+          _buildPropertiesTab(),
         ],
       ),
     );
@@ -360,59 +641,129 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
 
   Widget _buildAboutTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Contact Cards
-          Row(
-            children: [
-              if (_agency!.contactPhone != null)
-                Expanded(
-                  child: _buildContactCard(
-                    Icons.phone_rounded,
-                    'Phone',
-                    _agency!.contactPhone!,
-                    () => _makePhoneCall(_agency!.contactPhone!),
+          // Contact Section
+          const Text(
+            'Contact Information',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textColor,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (_agency!.contactPhone != null)
+            _buildModernContactCard(
+              icon: Icons.phone_outlined,
+              title: 'Phone Number',
+              value: _agency!.contactPhone!,
+              onTap: () => _makePhoneCall(_agency!.contactPhone!),
+            ),
+          if (_agency!.contactEmail != null) ...[
+            const SizedBox(height: 10),
+            _buildModernContactCard(
+              icon: Icons.email_outlined,
+              title: 'Email Address',
+              value: _agency!.contactEmail!,
+              onTap: () => _sendEmail(_agency!.contactEmail!),
+            ),
+          ],
+
+          // Office Hours
+          const SizedBox(height: 24),
+          const Text(
+            'Office Hours',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textColor,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(
+                    Icons.access_time_outlined,
+                    color: AppColors.primaryColor,
+                    size: 22,
                   ),
                 ),
-              if (_agency!.contactPhone != null && _agency!.contactEmail != null)
-                const SizedBox(width: 12),
-              if (_agency!.contactEmail != null)
-                Expanded(
-                  child: _buildContactCard(
-                    Icons.email_rounded,
-                    'Email',
-                    _agency!.contactEmail!,
-                    () => _sendEmail(_agency!.contactEmail!),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Mon - Sat | 08:00 AM - 06:00 PM',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textColor,
+                        ),
+                      ),
+                      SizedBox(height: 2),
+                      Text(
+                        'Sunday Closed',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-            ],
+              ],
+            ),
           ),
 
-          const SizedBox(height: 24),
-
-          // Location Card
-          if (_agency!.address != null || _agency!.state != null)
+          // Location
+          if (_agency!.address != null || _agency!.state != null) ...[
+            const SizedBox(height: 24),
+            const Text(
+              'Location',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
+              ),
+            ),
+            const SizedBox(height: 12),
             Container(
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(16),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: Colors.grey.shade200),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
                       color: AppColors.primaryColor.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(
-                      Icons.location_on_rounded,
+                      Icons.location_on_outlined,
                       color: AppColors.primaryColor,
-                      size: 24,
+                      size: 22,
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -420,15 +771,6 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Location',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
                         if (_agency!.address != null)
                           Text(
                             _agency!.address!,
@@ -438,97 +780,81 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                               color: AppColors.textColor,
                             ),
                           ),
-                        if (_agency!.state != null)
+                        if (_agency!.state != null) ...[
+                          const SizedBox(height: 4),
                           Text(
-                            _agency!.city != null 
+                            _agency!.city != null
                                 ? '${_agency!.city}, ${_agency!.state}'
                                 : _agency!.state!,
                             style: TextStyle(
-                              color: Colors.grey.shade700,
                               fontSize: 14,
+                              color: Colors.grey.shade700,
                             ),
                           ),
+                        ],
                       ],
                     ),
                   ),
                 ],
               ),
             ),
-
-          if (_agency!.address != null || _agency!.state != null)
-            const SizedBox(height: 24),
+          ],
 
           // Description
           if (_agency!.description != null) ...[
+            const SizedBox(height: 24),
             const Text(
               'About Us',
               style: TextStyle(
-                fontSize: 20,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textColor,
               ),
             ),
             const SizedBox(height: 12),
-            Text(
-              _agency!.description!,
-              style: TextStyle(
-                fontSize: 15,
-                color: Colors.grey.shade700,
-                height: 1.6,
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.shade200),
+              ),
+              child: Text(
+                _agency!.description!,
+                style: TextStyle(
+                  fontSize: 15,
+                  color: Colors.grey.shade700,
+                  height: 1.6,
+                ),
               ),
             ),
-            const SizedBox(height: 24),
           ],
 
-          // Stats
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  Icons.home_work_rounded,
-                  '${_agencyProperties.length}',
-                  'Properties',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  Icons.star_rounded,
-                  '4.8',
-                  'Rating',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  Icons.people_rounded,
-                  '25+',
-                  'Agents',
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
           // Verification Badge
-          if (_agency!.verified)
+          if (_agency!.verified) ...[
+            const SizedBox(height: 24),
             Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: AppColors.primaryColor.withValues(alpha: 0.08),
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primaryColor.withValues(alpha: 0.1),
+                    AppColors.primaryColor.withValues(alpha: 0.05),
+                  ],
+                ),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
                   color: AppColors.primaryColor.withValues(alpha: 0.3),
+                  width: 1.5,
                 ),
               ),
               child: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: AppColors.primaryColor,
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: const Icon(
                       Icons.verified_rounded,
@@ -536,13 +862,13 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                       size: 24,
                     ),
                   ),
-                  const SizedBox(width: 14),
+                  const SizedBox(width: 16),
                   const Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Verified Agency',
+                          'Fully Verified Agency',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -551,10 +877,11 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                         ),
                         SizedBox(height: 4),
                         Text(
-                          'This agency has been verified by WeNest',
+                          'This agency has been vetted for legitimacy and premium service quality by WeNest.',
                           style: TextStyle(
                             fontSize: 13,
                             color: AppColors.primaryColor,
+                            height: 1.4,
                           ),
                         ),
                       ],
@@ -563,7 +890,68 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
                 ],
               ),
             ),
+          ],
+
+          const SizedBox(height: 20),
         ],
+      ),
+    );
+  }
+
+  Widget _buildModernContactCard({
+    required IconData icon,
+    required String title,
+    required String value,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: AppColors.primaryColor, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios,
+                size: 16, color: Colors.grey.shade400),
+          ],
+        ),
       ),
     );
   }
@@ -574,12 +962,12 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
         : _agencyProperties.isEmpty
             ? _buildEmptyProperties()
             : ListView.builder(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(16),
                 itemCount: _agencyProperties.length,
                 itemBuilder: (context, index) {
                   return Padding(
                     padding: EdgeInsets.only(
-                      bottom: index < _agencyProperties.length - 1 ? 16 : 0,
+                      bottom: index < _agencyProperties.length - 1 ? 12 : 0,
                     ),
                     child: _buildPropertyCard(_agencyProperties[index]),
                   );
@@ -587,288 +975,185 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
               );
   }
 
-  Widget _buildContactCard(IconData icon, String label, String value, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: AppColors.primaryColor, size: 24),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textColor,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatCard(IconData icon, String value, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: AppColors.primaryColor, size: 28),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textColor,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.grey.shade600,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildPropertyCard(Property property) {
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, '/property_detail', arguments: property.id);
+        Navigator.pushNamed(
+          context,
+          '/property_detail',
+          arguments: property.id,
+        );
       },
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Property Image - UPDATED
-            Container(
-              width: 120,
-              height: 120,
-              decoration: const BoxDecoration(
-                color: AppColors.backgroundColor,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  bottomLeft: Radius.circular(16),
+            // Property Image
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: property.primaryImageUrl != null
+                      ? Image.network(
+                          property.primaryImageUrl!,
+                          height: 180,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 180,
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image_not_supported,
+                                  size: 60, color: Colors.grey),
+                            );
+                          },
+                        )
+                      : Container(
+                          height: 180,
+                          color: Colors.grey.shade200,
+                          child: const Icon(Icons.image_not_supported,
+                              size: 60, color: Colors.grey),
+                        ),
                 ),
-              ),
-              child: Stack(
-                children: [
-                  // Show real image or placeholder
-                  if (property.primaryImageUrl != null)
-                    ClipRRect(
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        bottomLeft: Radius.circular(16),
-                      ),
-                      child: Image.network(
-                        property.primaryImageUrl!,
-                        width: 120,
-                        height: 120,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (context, child, loadingProgress) {
-                          if (loadingProgress == null) return child;
-                          return Center(
-                            child: CircularProgressIndicator(
-                              value: loadingProgress.expectedTotalBytes != null
-                                  ? loadingProgress.cumulativeBytesLoaded /
-                                      loadingProgress.expectedTotalBytes!
-                                  : null,
-                              strokeWidth: 2,
-                              color: AppColors.primaryColor,
-                            ),
-                          );
-                        },
-                        errorBuilder: (context, error, stackTrace) {
-                          return Center(
-                            child: Icon(
-                              Icons.home_rounded,
-                              size: 40,
-                              color: AppColors.primaryColor.withValues(alpha: 0.3),
-                            ),
-                          );
-                        },
-                      ),
-                    )
-                  else
-                    Center(
-                      child: Icon(
-                        Icons.home_rounded,
-                        size: 40,
-                        color: AppColors.primaryColor.withValues(alpha: 0.3),
-                      ),
+                // Listing Type Badge
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryColor,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                  if (property.isFeatured)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AppColors.accentColor,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'FEATURED',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-            // Property Details (rest stays the same)
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            property.title,
-                            style: const TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.textColor,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Row(
-                      children: [
-                        Icon(Icons.location_on_rounded, size: 14, color: Colors.grey.shade500),
-                        const SizedBox(width: 4),
-                        Expanded(
-                          child: Text(
-                            property.locationDisplay,
-                            style: TextStyle(
-                              color: Colors.grey.shade600,
-                              fontSize: 12,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      property.formattedPrice,
+                    child: Text(
+                      property.listingTypeDisplay,
                       style: const TextStyle(
-                        fontSize: 17,
+                        color: Colors.white,
+                        fontSize: 12,
                         fontWeight: FontWeight.bold,
-                        color: AppColors.primaryColor,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        if (property.bedrooms != null && property.bedrooms! > 0) ...[
-                          Icon(Icons.bed_rounded, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${property.bedrooms}',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                          ),
-                          const SizedBox(width: 10),
-                        ],
-                        if (property.bathrooms != null && property.bathrooms! > 0) ...[
-                          Icon(Icons.bathtub_rounded, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${property.bathrooms}',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                          ),
-                          const SizedBox(width: 10),
-                        ],
-                        if (property.squareMeters != null) ...[
-                          Icon(Icons.square_foot_rounded, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 3),
-                          Text(
-                            '${property.squareMeters!.toInt()}m²',
-                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
+                // Favorite Button
+                Positioned(
+                  top: 12,
+                  right: 12,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.favorite_border,
+                      size: 20,
+                      color: AppColors.textColor,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            // Property Details
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    property.formattedPrice,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    property.title,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_outlined,
+                          size: 16, color: Colors.grey.shade600),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          property.locationDisplay,
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey.shade700,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (property.bedrooms != null)
+                        _buildPropertyFeature(
+                            Icons.bed_outlined, '${property.bedrooms}'),
+                      if (property.bathrooms != null) ...[
+                        const SizedBox(width: 16),
+                        _buildPropertyFeature(
+                            Icons.bathtub_outlined, '${property.bathrooms}'),
+                      ],
+                      if (property.squareMeters != null) ...[
+                        const SizedBox(width: 16),
+                        _buildPropertyFeature(
+                          Icons.square_foot_outlined,
+                          '${property.squareMeters!.toInt()}m²',
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPropertyFeature(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.grey.shade600),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey.shade700,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 
@@ -877,124 +1162,23 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.home_work_rounded, size: 80, color: Colors.grey.shade300),
+          Icon(Icons.home_work_outlined,
+              size: 80, color: Colors.grey.shade300),
           const SizedBox(height: 16),
-          const Text(
-            'No Properties Listed',
+          Text(
+            'No Properties Yet',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: Colors.grey,
+              color: Colors.grey.shade600,
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'This agency hasn\'t listed any properties yet',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () {
-                if (_agency!.contactPhone != null) {
-                  _makePhoneCall(_agency!.contactPhone!);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Phone number not available'),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: AppColors.primaryColor,
-                side: const BorderSide(color: AppColors.primaryColor, width: 2),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.phone_rounded),
-              label: const Text('Call', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () {
-                if (_agency!.contactEmail != null) {
-                  _sendEmail(_agency!.contactEmail!);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Email not available'),
-                      behavior: SnackBarBehavior.floating,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                  );
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                elevation: 0,
-              ),
-              icon: const Icon(Icons.email_rounded),
-              label: const Text('Email', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShimmerLoading() {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey.shade200,
-      highlightColor: Colors.grey.shade50,
-      child: Column(
-        children: [
-          Container(height: 220, color: Colors.white),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(height: 30, width: 200, color: Colors.white),
-                  const SizedBox(height: 16),
-                  Container(height: 20, width: double.infinity, color: Colors.white),
-                  const SizedBox(height: 20),
-                  Container(height: 100, color: Colors.white),
-                ],
-              ),
+            'This agency hasn\'t listed any properties',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade500,
             ),
           ),
         ],
@@ -1004,16 +1188,16 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
 
   Widget _buildPropertiesShimmer() {
     return ListView.builder(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       itemCount: 3,
       itemBuilder: (context, index) {
         return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.only(bottom: 12),
           child: Shimmer.fromColors(
-            baseColor: Colors.grey.shade200,
-            highlightColor: Colors.grey.shade50,
+            baseColor: Colors.grey.shade300,
+            highlightColor: Colors.grey.shade100,
             child: Container(
-              height: 120,
+              height: 280,
               decoration: BoxDecoration(
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(16),
@@ -1025,29 +1209,105 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen> with SingleTick
     );
   }
 
+  Widget _buildShimmerLoading() {
+    return Shimmer.fromColors(
+      baseColor: Colors.grey.shade300,
+      highlightColor: Colors.grey.shade100,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: 160,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Container(
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildErrorState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.error_outline_rounded, size: 100, color: Colors.grey.shade300),
-          const SizedBox(height: 20),
-          const Text(
-            'Agency not found',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryColor,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          Icon(Icons.error_outline, size: 80, color: Colors.grey.shade400),
+          const SizedBox(height: 16),
+          Text(
+            'Agency Not Found',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade700,
             ),
-            child: const Text('Go Back'),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'The agency you\'re looking for doesn\'t exist',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back),
+            label: const Text('Go Back'),
+            style: ElevatedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            ),
           ),
         ],
       ),
     );
+  }
+}
+
+// Sticky Tab Bar Delegate
+class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar tabBar;
+
+  _StickyTabBarDelegate(this.tabBar);
+
+  @override
+  double get minExtent => tabBar.preferredSize.height;
+
+  @override
+  double get maxExtent => tabBar.preferredSize.height;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Colors.white,
+      child: tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_StickyTabBarDelegate oldDelegate) {
+    return false;
   }
 }

@@ -219,8 +219,8 @@ class _MessagesScreenState extends State<MessagesScreen> {
           _showNewMessageDialog();
         },
         backgroundColor: AppColors.primaryColor,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('New Message', style: TextStyle(fontWeight: FontWeight.bold)),
+        icon: const Icon(Icons.add_rounded, color: Colors.white),
+        label: const Text('New Message', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
       ),
     );
   }

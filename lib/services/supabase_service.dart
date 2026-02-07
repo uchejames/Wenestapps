@@ -135,154 +135,161 @@ class SupabaseService {
 
   // ============ STORAGE METHODS ============
   
-/// Delete file from Supabase Storage
-Future<void> deleteFile({
-  required String bucket,
-  required String path,
-}) async {
-  try {
-    await client.storage.from(bucket).remove([path]);
-  } catch (e) {
-    debugPrint('Error deleting file: $e');
-    rethrow;
+  /// Delete file from Supabase Storage
+  Future<void> deleteFile({
+    required String bucket,
+    required String path,
+  }) async {
+    try {
+      await client.storage.from(bucket).remove([path]);
+    } catch (e) {
+      debugPrint('Error deleting file: $e');
+      rethrow;
+    }
   }
-}
 
-// ============ PROPERTY MEDIA METHODS ============
+  // ============ PROPERTY MEDIA METHODS ============
 
-Future<List<Map<String, dynamic>>> getPropertyMedia(int propertyId) async {
-  try {
-    final response = await client
-        .from('property_media')
-        .select()
-        .eq('property_id', propertyId)
-        .order('display_order', ascending: true);
-    return List<Map<String, dynamic>>.from(response);
-  } catch (e) {
-    debugPrint('Error getting property media: $e');
-    return [];
+  /// Fetches all media files for a specific property
+  /// Returns a list of PropertyMedia objects sorted by display order
+  Future<List<PropertyMedia>> getPropertyMedia(String propertyId) async {
+    try {
+      final response = await client
+          .from('property_media')
+          .select()
+          .eq('property_id', propertyId)
+          .order('is_primary', ascending: false)  // Primary images first
+          .order('display_order', ascending: true);  // Then by display order
+
+      if (response is! List) {
+        return [];
+      }
+
+      return response
+          .map((json) => PropertyMedia.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching property media: $e');
+      return [];
+    }
   }
-}
 
-Future<void> addPropertyMedia({
-  required int propertyId,
-  required String fileUrl,
-  String fileType = 'image',
-  int displayOrder = 0,
-  bool isPrimary = false,
-  String? caption,
-}) async {
-  try {
-    await client.from('property_media').insert({
-      'property_id': propertyId,
-      'file_url': fileUrl,
-      'file_type': fileType,
-      'display_order': displayOrder,
-      'is_primary': isPrimary,
-      'caption': caption,
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  } catch (e) {
-    debugPrint('Error adding property media: $e');
-    rethrow;
+  Future<void> addPropertyMedia({
+    required String propertyId,
+    required String fileUrl,
+    String fileType = 'image',
+    int displayOrder = 0,
+    bool isPrimary = false,
+    String? caption,
+  }) async {
+    try {
+      await client.from('property_media').insert({
+        'property_id': propertyId,
+        'file_url': fileUrl,
+        'file_type': fileType,
+        'display_order': displayOrder,
+        'is_primary': isPrimary,
+        'caption': caption,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+    } catch (e) {
+      debugPrint('Error adding property media: $e');
+      rethrow;
+    }
   }
-}
 
-// ============================================
-// ADD THESE METHODS TO SupabaseService class
-// Add after the existing addPropertyMedia method
-// ============================================
+  /// Upload property media file (image or video) and save to database
+  Future<void> uploadPropertyMedia({
+    required String propertyId,
+    required File file,
+    required String mediaType, // 'image' or 'video'
+    int displayOrder = 0,
+  }) async {
+    try {
+      // Generate unique filename
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = file.path.split('.').last;
+      final fileName = 'property_${propertyId}_${timestamp}_$displayOrder.$extension';
+      
+      // Determine bucket based on media type
+      // FIXED: Use single bucket for all property media
+      const bucket = 'property-uploads';
 
-/// Upload property media file (image or video) and save to database
-Future<void> uploadPropertyMedia({
-  required String propertyId,
-  required File file,
-  required String mediaType, // 'image' or 'video'
-  int displayOrder = 0,
-}) async {
-  try {
-    // Generate unique filename
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final extension = file.path.split('.').last;
-    final fileName = 'property_${propertyId}_${timestamp}_$displayOrder.$extension';
-    
-    // Determine bucket based on media type
-    final bucket = mediaType == 'video' ? 'property-videos' : 'property-images';
-    
-    // Upload file to Supabase Storage
-    final uploadPath = '$propertyId/$fileName';
-    await client.storage.from(bucket).upload(
-      uploadPath,
-      file,
-      fileOptions: const FileOptions(
-        cacheControl: '3600',
-        upsert: false,
-      ),
-    );
-    
-    // Get public URL
-    final fileUrl = client.storage.from(bucket).getPublicUrl(uploadPath);
-    
-    // Save to property_media table
-    await addPropertyMedia(
-      propertyId: int.parse(propertyId),
-      fileUrl: fileUrl,
-      fileType: mediaType,
-      displayOrder: displayOrder,
-      isPrimary: displayOrder == 0, // First image is primary
-    );
-  } catch (e) {
-    debugPrint('Error uploading property media: $e');
-    rethrow;
+      // Upload file to Supabase Storage with subfolder based on type
+      final uploadPath = mediaType == 'video' 
+          ? 'videos/$propertyId/$fileName'
+          : 'images/$propertyId/$fileName';
+      await client.storage.from(bucket).upload(
+        uploadPath,
+        file,
+        fileOptions: const FileOptions(
+          cacheControl: '3600',
+          upsert: false,
+        ),
+      );
+      
+      // Get public URL
+      final fileUrl = client.storage.from(bucket).getPublicUrl(uploadPath);
+      
+      // Save to property_media table
+      await addPropertyMedia(
+        propertyId: propertyId,
+        fileUrl: fileUrl,
+        fileType: mediaType,
+        displayOrder: displayOrder,
+        isPrimary: displayOrder == 0, // First image is primary
+      );
+    } catch (e) {
+      debugPrint('Error uploading property media: $e');
+      rethrow;
+    }
   }
-}
 
-/// Upload file and return URL (generic method)
-Future<String> uploadFile({
-  required File file,
-  required String bucket,
-  required String path,
-}) async {
-  try {
-    await client.storage.from(bucket).upload(
-      path,
-      file,
-      fileOptions: const FileOptions(
-        cacheControl: '3600',
-        upsert: false,
-      ),
-    );
-    
-    return client.storage.from(bucket).getPublicUrl(path);
-  } catch (e) {
-    debugPrint('Error uploading file: $e');
-    rethrow;
+  /// Upload file and return URL (generic method)
+  Future<String> uploadFile({
+    required File file,
+    required String bucket,
+    required String path,
+  }) async {
+    try {
+      await client.storage.from(bucket).upload(
+        path,
+        file,
+        fileOptions: const FileOptions(
+          cacheControl: '3600',
+          upsert: false,
+        ),
+      );
+      
+      return client.storage.from(bucket).getPublicUrl(path);
+    } catch (e) {
+      debugPrint('Error uploading file: $e');
+      rethrow;
+    }
   }
-}
 
-Future<void> updatePropertyMediaPrimary(String mediaId, bool isPrimary) async {
-  try {
-    await client.from('property_media').update({
-      'is_primary': isPrimary,
-    }).eq('id', mediaId);
-  } catch (e) {
-    debugPrint('Error updating property media: $e');
-    rethrow;
+  Future<void> updatePropertyMediaPrimary(String mediaId, bool isPrimary) async {
+    try {
+      await client.from('property_media').update({
+        'is_primary': isPrimary,
+      }).eq('id', mediaId);
+    } catch (e) {
+      debugPrint('Error updating property media: $e');
+      rethrow;
+    }
   }
-}
 
-Future<void> deletePropertyMedia(String mediaId) async {
-  try {
-    await client.from('property_media').delete().eq('id', mediaId);
-  } catch (e) {
-    debugPrint('Error deleting property media: $e');
-    rethrow;
+  Future<void> deletePropertyMedia(String mediaId) async {
+    try {
+      await client.from('property_media').delete().eq('id', mediaId);
+    } catch (e) {
+      debugPrint('Error deleting property media: $e');
+      rethrow;
+    }
   }
-}
 
   // ============ PROPERTY METHODS ============
   
-
   Future<Property?> getPropertyById(String id) async {
     try {
       final response = await client
@@ -296,15 +303,13 @@ Future<void> deletePropertyMedia(String mediaId) async {
       
       final property = Property.fromJson(response);
       
-      // Load media
-      final media = await getPropertyMedia(property.id);
-      final primaryImage = media.firstWhere(
-        (m) => m['is_primary'] == true,
-        orElse: () => media.isNotEmpty ? media.first : {},
-      );
+      // Load media - now returns List<PropertyMedia> directly
+      final mediaList = await getPropertyMedia(property.id);
       
-      final mediaList = media.map((m) => PropertyMedia.fromJson(m)).toList();
-      final primaryImageUrl = primaryImage.isNotEmpty ? primaryImage['file_url'] as String? : null;
+      // Get primary image
+      final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+      final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                             (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
       
       return property.copyWith(
         media: mediaList,
@@ -572,94 +577,6 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // Add this method to SupabaseService class
-
-  // ============ ENHANCED PROPERTY METHODS WITH MEDIA ============
-
-  Future<List<Property>> getPropertiesWithMedia({
-    String? propertyType,
-    String? listingType,
-    String? state,
-    String? cityArea,
-    double? minPrice,
-    double? maxPrice,
-    int? minBedrooms,
-    int? maxBedrooms,
-    bool? isFeatured,
-    String? status = 'active',
-    String? agencyId,
-    String? agentId,
-    String? landlordId,
-    int limit = 50,
-  }) async {
-    try {
-      // Get properties first
-      final properties = await getProperties(
-        propertyType: propertyType,
-        listingType: listingType,
-        state: state,
-        cityArea: cityArea,
-        minPrice: minPrice,
-        maxPrice: maxPrice,
-        minBedrooms: minBedrooms,
-        maxBedrooms: maxBedrooms,
-        isFeatured: isFeatured,
-        status: status,
-        agencyId: agencyId,
-        agentId: agentId,
-        landlordId: landlordId,
-        limit: limit,
-      );
-
-      // Load media for each property
-      final propertiesWithMedia = <Property>[];
-      for (var property in properties) {
-        final media = await getPropertyMedia(property.id);
-        final primaryImage = media.firstWhere(
-          (m) => m['is_primary'] == true,
-          orElse: () => media.isNotEmpty ? media.first : {},
-        );
-        
-        final mediaList = media.map((m) => PropertyMedia.fromJson(m)).toList();
-        final primaryImageUrl = primaryImage.isNotEmpty ? primaryImage['file_url'] as String? : null;
-        
-        propertiesWithMedia.add(property.copyWith(
-          media: mediaList,
-          primaryImageUrl: primaryImageUrl,
-        ));
-      }
-
-      return propertiesWithMedia;
-    } catch (e) {
-      debugPrint('Error getting properties with media: $e');
-      return [];
-    }
-  }
-
-  Future<Property?> getPropertyByIdWithMedia(String id) async {
-    try {
-      final property = await getPropertyById(id);
-      if (property == null) return null;
-
-      final media = await getPropertyMedia(property.id);
-      final primaryImage = media.firstWhere(
-        (m) => m['is_primary'] == true,
-        orElse: () => media.isNotEmpty ? media.first : {},
-      );
-      
-      final mediaList = media.map((m) => PropertyMedia.fromJson(m)).toList();
-      final primaryImageUrl = primaryImage.isNotEmpty ? primaryImage['file_url'] as String? : null;
-      
-      return property.copyWith(
-        media: mediaList,
-        primaryImageUrl: primaryImageUrl,
-      );
-    } catch (e) {
-      debugPrint('Error getting property with media: $e');
-      return null;
-    }
-  }
-
   Future<Landlord?> getLandlordById(String id) async {
     try {
       final response = await client
@@ -688,7 +605,39 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // ============ ENHANCED PROPERTY METHODS FOR AGENCIES ============
+  Future<String> createLandlord({
+    required String profileId,
+    String? companyName,
+    required String email,
+    required String phone,
+    required String address,
+    required String state,
+    required String city,
+  }) async {
+    try {
+      final response = await client.from('landlords').insert({
+        'profile_id': profileId,
+        'company_name': companyName,
+        'email': email,
+        'phone': phone,
+        'address': address,
+        'state': state,
+        'city': city,
+        'verified': false,
+        'properties_count': 0,
+        'created_at': DateTime.now().toIso8601String(),
+      }).select().single();
+      
+      await updateUserType(profileId, 'landlord');
+      
+      return response['id'] as String;
+    } catch (e) {
+      debugPrint('Error creating landlord: $e');
+      rethrow;
+    }
+  }
+
+  // ============ ENHANCED PROPERTY METHODS ============
 
   Future<List<Property>> getProperties({
     String? propertyType,
@@ -742,14 +691,12 @@ Future<void> deletePropertyMedia(String mediaId) async {
       // Load media for all properties
       final propertiesWithMedia = <Property>[];
       for (var property in properties) {
-        final media = await getPropertyMedia(property.id);
-        final primaryImage = media.firstWhere(
-          (m) => m['is_primary'] == true,
-          orElse: () => media.isNotEmpty ? media.first : {},
-        );
+        final mediaList = await getPropertyMedia(property.id);
         
-        final mediaList = media.map((m) => PropertyMedia.fromJson(m)).toList();
-        final primaryImageUrl = primaryImage.isNotEmpty ? primaryImage['file_url'] as String? : null;
+        // Get primary image
+        final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+        final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                               (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
         
         propertiesWithMedia.add(property.copyWith(
           media: mediaList,
@@ -764,7 +711,46 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // NEW: Get property count for agency
+  Future<List<Property>> getPropertiesWithMedia({
+    String? propertyType,
+    String? listingType,
+    String? state,
+    String? cityArea,
+    double? minPrice,
+    double? maxPrice,
+    int? minBedrooms,
+    int? maxBedrooms,
+    bool? isFeatured,
+    String? status = 'active',
+    String? agencyId,
+    String? agentId,
+    String? landlordId,
+    int limit = 50,
+  }) async {
+    // This method now just calls getProperties since it already loads media
+    return getProperties(
+      propertyType: propertyType,
+      listingType: listingType,
+      state: state,
+      cityArea: cityArea,
+      minPrice: minPrice,
+      maxPrice: maxPrice,
+      minBedrooms: minBedrooms,
+      maxBedrooms: maxBedrooms,
+      isFeatured: isFeatured,
+      status: status,
+      agencyId: agencyId,
+      agentId: agentId,
+      landlordId: landlordId,
+      limit: limit,
+    );
+  }
+
+  Future<Property?> getPropertyByIdWithMedia(String id) async {
+    // This method now just calls getPropertyById since it already loads media
+    return getPropertyById(id);
+  }
+
   Future<int> getAgencyPropertyCount(String agencyId, {String? status}) async {
     try {
       final props = await getProperties(agencyId: agencyId, status: status, limit: 1000);
@@ -775,7 +761,6 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // NEW: Get agency statistics
   Future<Map<String, dynamic>> getAgencyStats(String agencyId) async {
     try {
       final properties = await getProperties(agencyId: agencyId, limit: 1000);
@@ -804,7 +789,6 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // NEW: Create property
   Future<String> createProperty({
     required String title,
     required String description,
@@ -857,8 +841,8 @@ Future<void> deletePropertyMedia(String mediaId) async {
         'longitude': longitude,
         'status': 'draft',
         'is_approved': false,
-        'auto_publish': true,  // NEW: Will auto-publish via trigger
-        'review_status': 'pending',  // NEW: For review system
+        'auto_publish': true,
+        'review_status': 'pending',
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
       }).select().single();
@@ -870,7 +854,6 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // NEW: Update property
   Future<void> updateProperty({
     required String propertyId,
     String? title,
@@ -921,7 +904,6 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // NEW: Delete property
   Future<void> deleteProperty(String propertyId) async {
     try {
       await client.from('properties').delete().eq('id', propertyId);
@@ -931,7 +913,6 @@ Future<void> deletePropertyMedia(String mediaId) async {
     }
   }
 
-  // NEW: Publish property
   Future<void> publishProperty(String propertyId) async {
     try {
       await client.from('properties').update({
@@ -947,7 +928,6 @@ Future<void> deletePropertyMedia(String mediaId) async {
 
   // ============ AGENT MANAGEMENT FOR AGENCIES ============
 
-  // NEW: Get agents for specific agency
   Future<List<Agent>> getAgencyAgents(String agencyId) async {
     try {
       final response = await client
@@ -959,12 +939,11 @@ Future<void> deletePropertyMedia(String mediaId) async {
       
       return (response as List).map((data) => Agent.fromJson(data)).toList();
     } catch (e) {
-      print('Error getting agency agents: $e');
+      debugPrint('Error getting agency agents: $e');
       return [];
     }
   }
 
-  // NEW: Invite agent to agency
   Future<void> inviteAgentToAgency(String agentId, String agencyId) async {
     try {
       await client.from('agents').update({
@@ -972,12 +951,11 @@ Future<void> deletePropertyMedia(String mediaId) async {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', agentId);
     } catch (e) {
-      print('Error inviting agent: $e');
+      debugPrint('Error inviting agent: $e');
       rethrow;
     }
   }
 
-  // NEW: Remove agent from agency
   Future<void> removeAgentFromAgency(String agentId) async {
     try {
       await client.from('agents').update({
@@ -985,14 +963,13 @@ Future<void> deletePropertyMedia(String mediaId) async {
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', agentId);
     } catch (e) {
-      print('Error removing agent: $e');
+      debugPrint('Error removing agent: $e');
       rethrow;
     }
   }
 
   // ============ ANALYTICS METHODS ============
 
-  // NEW: Get property views over time (FIXED)
   Future<List<Map<String, dynamic>>> getPropertyViewsAnalytics(
     String agencyId,
     DateTime startDate,
@@ -1017,12 +994,11 @@ Future<void> deletePropertyMedia(String mediaId) async {
           .map((e) => {'date': e.key, 'views': e.value})
           .toList();
     } catch (e) {
-      print('Error getting views analytics: $e');
+      debugPrint('Error getting views analytics: $e');
       return [];
     }
   }
 
-  // NEW: Get top performing properties (FIXED)
   Future<List<Property>> getTopPerformingProperties(
     String agencyId, {
     int limit = 10,
@@ -1050,40 +1026,8 @@ Future<void> deletePropertyMedia(String mediaId) async {
       
       return (response as List).map((data) => Property.fromJson(data)).toList();
     } catch (e) {
-      print('Error getting top properties: $e');
+      debugPrint('Error getting top properties: $e');
       return [];
-    }
-  }
-
-  Future<String> createLandlord({
-    required String profileId,
-    String? companyName,
-    required String email,
-    required String phone,
-    required String address,
-    required String state,
-    required String city,
-  }) async {
-    try {
-      final response = await client.from('landlords').insert({
-        'profile_id': profileId,
-        'company_name': companyName,
-        'email': email,
-        'phone': phone,
-        'address': address,
-        'state': state,
-        'city': city,
-        'verified': false,
-        'properties_count': 0,
-        'created_at': DateTime.now().toIso8601String(),
-      }).select().single();
-      
-      await updateUserType(profileId, 'landlord');
-      
-      return response['id'] as String;
-    } catch (e) {
-      print('Error creating landlord: $e');
-      rethrow;
     }
   }
 
@@ -1107,7 +1051,7 @@ Future<void> deletePropertyMedia(String mediaId) async {
           return false;
       }
     } catch (e) {
-      print('Error checking role registration: $e');
+      debugPrint('Error checking role registration: $e');
       return false;
     }
   }
@@ -1132,7 +1076,7 @@ Future<void> deletePropertyMedia(String mediaId) async {
           return '/role_selection';
       }
     } catch (e) {
-      print('Error getting dashboard route: $e');
+      debugPrint('Error getting dashboard route: $e');
       return '/role_selection';
     }
   }

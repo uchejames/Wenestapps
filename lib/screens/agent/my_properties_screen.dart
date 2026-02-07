@@ -425,7 +425,7 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
                       ? ClipRRect(
                           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
                           child: Image.network(
-                            property.media.first.mediaUrl,
+                            property.media.first.fileUrl,
                             width: double.infinity,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const Center(

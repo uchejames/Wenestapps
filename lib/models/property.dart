@@ -1,7 +1,7 @@
 import 'property_media.dart';
 
 class Property {
-  final int id;
+  final String id;
   final String? agentId;
   final String? landlordId;
   final String? agencyId;
@@ -101,7 +101,7 @@ class Property {
 
   factory Property.fromJson(Map<String, dynamic> json) {
     return Property(
-      id: json['id'] as int,
+      id: json['id'].toString(),
       agentId: json['agent_id'] as String?,
       landlordId: json['landlord_id'] as String?,
       agencyId: json['agency_id'] as String?,

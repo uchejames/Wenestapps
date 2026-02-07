@@ -619,7 +619,7 @@ class _AgentPerformanceScreenState extends State<AgentPerformanceScreen> {
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(8),
                           child: Image.network(
-                            property.media.first.mediaUrl,
+                            property.media.first.fileUrl,
                             fit: BoxFit.cover,
                             errorBuilder: (_, __, ___) => const Icon(
                               Icons.home_rounded,
