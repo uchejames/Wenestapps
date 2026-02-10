@@ -215,6 +215,7 @@ class _MessagesScreenState extends State<MessagesScreen> {
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'messages_fab',
         onPressed: () {
           _showNewMessageDialog();
         },

@@ -12,40 +12,52 @@ class MessagingService {
   // ============ CONVERSATION METHODS ============
 
   /// Get or create a conversation between two users
-  Future<Conversation> getOrCreateConversation({
-    required String otherUserId,
-  }) async {
-    try {
-      final currentUserId = _client.auth.currentUser?.id;
-      if (currentUserId == null) {
-        throw Exception('User not authenticated');
-      }
-
-      // Check if conversation already exists (either direction)
-      final existingConversation = await _client
-          .from('conversations')
-          .select()
-          .or('and(initiator_id.eq.$currentUserId,receiver_id.eq.$otherUserId),and(initiator_id.eq.$otherUserId,receiver_id.eq.$currentUserId)')
-          .maybeSingle();
-
-      if (existingConversation != null) {
-        return Conversation.fromJson(existingConversation);
-      }
-
-      // Create new conversation
-      final newConversation = await _client.from('conversations').insert({
-        'initiator_id': currentUserId,
-        'receiver_id': otherUserId,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).select().single();
-
-      return Conversation.fromJson(newConversation);
-    } catch (e) {
-      debugPrint('Error getting/creating conversation: $e');
-      rethrow;
+Future<Conversation> getOrCreateConversation({
+  required String otherUserId,
+  String? propertyId,
+}) async {
+  try {
+    final currentUserId = _client.auth.currentUser?.id;
+    if (currentUserId == null) {
+      throw Exception('User not authenticated');
     }
+
+    // Check if conversation already exists (considering property_id)
+    var query = _client
+        .from('conversations')
+        .select()
+        .or(
+          'and(initiator_id.eq.$currentUserId,receiver_id.eq.$otherUserId),'
+          'and(initiator_id.eq.$otherUserId,receiver_id.eq.$currentUserId)',
+        );
+
+    if (propertyId != null) {
+      query = query.eq('property_id', propertyId);
+    } else {
+      query = query.filter('property_id', 'is', null);
+    }
+
+    final existingConversation = await query.maybeSingle();
+
+    if (existingConversation != null) {
+      return Conversation.fromJson(existingConversation);
+    }
+
+    // Create new conversation
+    final newConversation = await _client.from('conversations').insert({
+      'initiator_id': currentUserId,
+      'receiver_id': otherUserId,
+      if (propertyId != null) 'property_id': propertyId,
+      'created_at': DateTime.now().toIso8601String(),
+      'updated_at': DateTime.now().toIso8601String(),
+    }).select().single();
+
+    return Conversation.fromJson(newConversation);
+  } catch (e) {
+    debugPrint('Error getting/creating conversation: $e');
+    rethrow;
   }
+}
 
   /// Get all conversations for the current user
   Future<List<Map<String, dynamic>>> getUserConversations() async {

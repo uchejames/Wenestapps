@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agent.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 
 // ============ AGENT PROFILE SCREEN ============
 
@@ -21,6 +23,87 @@ class AgentProfileScreen extends StatefulWidget {
 
 class _AgentProfileScreenState extends State<AgentProfileScreen> {
   final _supabaseService = SupabaseService();
+  final _imagePicker = ImagePicker();
+  bool _isUploadingImage = false;
+
+  Future<void> _handleImageUpload() async {
+    try {
+      final XFile? image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
+
+      if (image == null) return;
+
+      setState(() => _isUploadingImage = true);
+
+      // Delete old profile picture if exists
+      if (widget.agent.avatarUrl != null && widget.agent.avatarUrl!.isNotEmpty) {
+        try {
+          final oldPath = widget.agent.avatarUrl!.split('/').last;
+          await _supabaseService.deleteFile(
+            bucket: 'profile-pictures',
+            path: '${widget.agent.profileId}/$oldPath',
+          );
+        } catch (e) {
+          debugPrint('Error deleting old image: $e');
+        }
+      }
+
+      // Upload new image
+      final file = File(image.path);
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final extension = image.path.split('.').last;
+      final fileName = 'avatar_$timestamp.$extension';
+      final filePath = '${widget.agent.profileId}/$fileName';
+
+      final imageUrl = await _supabaseService.uploadFile(
+        file: file,
+        bucket: 'profile-pictures',
+        path: filePath,
+      );
+
+      // Update profile with new avatar URL
+      await _supabaseService.updateProfile(
+        userId: widget.agent.profileId,
+        avatarUrl: imageUrl,
+      );
+
+      setState(() => _isUploadingImage = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Profile picture updated successfully'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        widget.onUpdate();
+      }
+    } catch (e) {
+      setState(() => _isUploadingImage = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error uploading image: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+      }
+    }
+  }
 
   Future<void> _handleSignOut() async {
     final confirm = await showDialog<bool>(
@@ -127,45 +210,57 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(47),
-                  child: widget.agent.avatarUrl != null
-                      ? Image.network(
-                          widget.agent.avatarUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.grey.shade100,
-                            child: const Icon(
-                              Icons.person_rounded,
-                              size: 50,
+                  child: _isUploadingImage
+                      ? Container(
+                          color: Colors.grey.shade100,
+                          child: const Center(
+                            child: CircularProgressIndicator(
                               color: AppColors.primaryColor,
+                              strokeWidth: 2,
                             ),
                           ),
                         )
-                      : Container(
-                          color: Colors.grey.shade100,
-                          child: const Icon(
-                            Icons.person_rounded,
-                            size: 50,
-                            color: AppColors.primaryColor,
-                          ),
-                        ),
+                      : widget.agent.avatarUrl != null
+                          ? Image.network(
+                              widget.agent.avatarUrl!,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: Colors.grey.shade100,
+                                child: const Icon(
+                                  Icons.person_rounded,
+                                  size: 50,
+                                  color: AppColors.primaryColor,
+                                ),
+                              ),
+                            )
+                          : Container(
+                              color: Colors.grey.shade100,
+                              child: const Icon(
+                                Icons.person_rounded,
+                                size: 50,
+                                color: AppColors.primaryColor,
+                              ),
+                            ),
                 ),
               ),
               Positioned(
                 bottom: 0,
                 right: 0,
                 child: GestureDetector(
-                  onTap: () {
-                    // Handle photo upload
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Photo upload coming soon')),
-                    );
-                  },
+                  onTap: _isUploadingImage ? null : _handleImageUpload,
                   child: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: AppColors.primaryColor,
                       shape: BoxShape.circle,
                       border: Border.all(color: Colors.white, width: 2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
                     ),
                     child: const Icon(
                       Icons.camera_alt_rounded,
@@ -277,7 +372,7 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
           Expanded(
             child: _buildStatCard(
               'Experience',
-              '${widget.agent.yearsOfExperience} yrs',
+              '${widget.agent.yearsOfExperience ?? 0} yrs',
               Icons.work_outline_rounded,
               Colors.blue,
             ),
@@ -369,7 +464,7 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => _EditProfileScreen(
+                        builder: (context) => EditAgentProfileScreen(
                           agent: widget.agent,
                           onUpdate: widget.onUpdate,
                         ),
@@ -412,7 +507,11 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
                   title: 'License Information',
                   subtitle: widget.agent.licenseNumber ?? 'Not added',
                   onTap: () {
-                    // Navigate to license management
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('License management coming soon'),
+                      ),
+                    );
                   },
                 ),
               ],
@@ -461,7 +560,11 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
                   title: 'Privacy & Security',
                   subtitle: 'Password, 2FA settings',
                   onTap: () {
-                    // Navigate to security settings
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Security settings coming soon'),
+                      ),
+                    );
                   },
                 ),
                 _buildDivider(),
@@ -479,7 +582,11 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
                   title: 'Appearance',
                   subtitle: 'Light mode',
                   onTap: () {
-                    // Navigate to appearance settings
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Appearance settings coming soon'),
+                      ),
+                    );
                   },
                 ),
               ],
@@ -679,22 +786,23 @@ class _AgentProfileScreenState extends State<AgentProfileScreen> {
   }
 }
 
-// ============ EDIT PROFILE SCREEN ============
+// ============ EDIT AGENT PROFILE SCREEN ============
 
-class _EditProfileScreen extends StatefulWidget {
+class EditAgentProfileScreen extends StatefulWidget {
   final Agent agent;
   final VoidCallback onUpdate;
 
-  const _EditProfileScreen({
+  const EditAgentProfileScreen({
+    super.key,
     required this.agent,
     required this.onUpdate,
   });
 
   @override
-  State<_EditProfileScreen> createState() => _EditProfileScreenState();
+  State<EditAgentProfileScreen> createState() => _EditAgentProfileScreenState();
 }
 
-class _EditProfileScreenState extends State<_EditProfileScreen> {
+class _EditAgentProfileScreenState extends State<EditAgentProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _supabaseService = SupabaseService();
 

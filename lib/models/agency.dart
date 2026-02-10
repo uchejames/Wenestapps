@@ -1,5 +1,7 @@
+// Updated agency.dart with profileId added
 class Agency {
   final String id;
+  final String? profileId; // Added this field
   final String name;
   final String? description;
   final String? logoUrl;
@@ -15,6 +17,7 @@ class Agency {
 
   Agency({
     required this.id,
+    this.profileId, // Added to constructor
     required this.name,
     this.description,
     this.logoUrl,
@@ -37,6 +40,7 @@ class Agency {
   factory Agency.fromJson(Map<String, dynamic> json) {
     return Agency(
       id: json['id'] as String,
+      profileId: json['profile_id'] as String?, // Added mapping
       name: json['name'] as String,
       description: json['description'] as String?,
       logoUrl: json['logo_url'] as String?,
@@ -57,6 +61,7 @@ class Agency {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
+      'profile_id': profileId, // Added to JSON
       'name': name,
       'description': description,
       'logo_url': logoUrl,

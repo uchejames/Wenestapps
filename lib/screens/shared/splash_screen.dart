@@ -19,41 +19,49 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _logoScale;
   late Animation<double> _taglineFade;
   late Animation<double> _taglineSlide;
+  late Animation<double> _shimmer;
 
   @override
   void initState() {
     super.initState();
 
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 2500),
       vsync: this,
     );
 
     _logoFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOut),
+        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
       ),
     );
 
-    _logoScale = Tween<double>(begin: 0.7, end: 1.0).animate(
+    _logoScale = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.1, 0.8, curve: Curves.elasticOut),
+        curve: const Interval(0.0, 0.7, curve: Curves.elasticOut),
       ),
     );
 
     _taglineFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.6, 1.0, curve: Curves.easeOut),
+        curve: const Interval(0.5, 0.9, curve: Curves.easeOut),
       ),
     );
 
-    _taglineSlide = Tween<double>(begin: 20.0, end: 0.0).animate(
+    _taglineSlide = Tween<double>(begin: 30.0, end: 0.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.6, 1.0, curve: Curves.easeOutCubic),
+        curve: const Interval(0.5, 0.9, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _shimmer = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.3, 1.0, curve: Curves.easeInOut),
       ),
     );
 
@@ -117,86 +125,190 @@ class _SplashScreenState extends State<SplashScreen>
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
               colors: [
-                AppColors.primaryColor,      // 0xFF0A3F3F
-                AppColors.darkTeal,          // 0xFF062828
+                AppColors.darkTeal,
+                AppColors.primaryColor,
+                AppColors.lightTeal,
               ],
+              stops: [0.0, 0.5, 1.0],
             ),
           ),
-          // Removed the duplicate SafeArea - now handled globally
           child: AnimatedBuilder(
             animation: _controller,
             builder: (context, child) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FadeTransition(
-                      opacity: _logoFade,
-                      child: ScaleTransition(
-                        scale: _logoScale,
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Container(
-                              width: 220,
-                              height: 220,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.08),
-                              ),
-                            ),
-                            Container(
-                              width: 180,
-                              height: 180,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.12),
-                              ),
-                            ),
-                            Container(
-                              width: 140,
-                              height: 140,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white.withValues(alpha: 0.18),
-                              ),
-                              child: Center(
-                                child: Image.asset(
-                                  'assets/images/splash.png',
-                                  width: 90,
-                                  height: 90,
-                                  fit: BoxFit.contain,
+              return Stack(
+                children: [
+                  // Animated background circles
+                  Positioned(
+                    top: -100,
+                    right: -100,
+                    child: Opacity(
+                      opacity: 0.05,
+                      child: Container(
+                        width: 300,
+                        height: 300,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -150,
+                    left: -150,
+                    child: Opacity(
+                      opacity: 0.05,
+                      child: Container(
+                        width: 400,
+                        height: 400,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  // Main content
+                  Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        // Logo with animated rings
+                        FadeTransition(
+                          opacity: _logoFade,
+                          child: ScaleTransition(
+                            scale: _logoScale,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                // Outer ring
+                                Container(
+                                  width: 200,
+                                  height: 200,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: AppColors.secondaryColor.withValues(alpha: 0.2),
+                                      width: 2,
+                                    ),
+                                  ),
                                 ),
+                                // Middle ring
+                                Container(
+                                  width: 160,
+                                  height: 160,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: AppColors.accentColor.withValues(alpha: 0.3),
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
+                                // Inner circle with logo
+                                Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withValues(alpha: 0.15),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: AppColors.accentColor.withValues(alpha: 0.3),
+                                        blurRadius: 20,
+                                        spreadRadius: 5,
+                                      ),
+                                    ],
+                                  ),
+                                  child: Center(
+                                    child: Image.asset(
+                                      'assets/images/splash.png',
+                                      width: 70,
+                                      height: 70,
+                                      fit: BoxFit.contain,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 50),
+
+                        // App name with shimmer effect
+                        FadeTransition(
+                          opacity: _taglineFade,
+                          child: Transform.translate(
+                            offset: Offset(0, _taglineSlide.value),
+                            child: Column(
+                              children: [
+                                ShaderMask(
+                                  shaderCallback: (bounds) {
+                                    return LinearGradient(
+                                      begin: Alignment.centerLeft,
+                                      end: Alignment.centerRight,
+                                      colors: const [
+                                        Colors.white,
+                                        AppColors.accentColor,
+                                        Colors.white,
+                                      ],
+                                      stops: [
+                                        _shimmer.value - 0.3,
+                                        _shimmer.value,
+                                        _shimmer.value + 0.3,
+                                      ],
+                                    ).createShader(bounds);
+                                  },
+                                  child: const Text(
+                                    AppStrings.appName,
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 42,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 3.0,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                Text(
+                                  AppStrings.appTagline,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w400,
+                                    letterSpacing: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 80),
+
+                        // Loading indicator
+                        FadeTransition(
+                          opacity: _taglineFade,
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 3,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                AppColors.accentColor.withValues(alpha: 0.8),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 40),
-
-                    FadeTransition(
-                      opacity: _taglineFade,
-                      child: Transform.translate(
-                        offset: Offset(0, _taglineSlide.value),
-                        child: const Text(
-                          AppStrings.appTagline,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 2.0,
                           ),
-                          textAlign: TextAlign.center,
                         ),
-                      ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               );
             },
           ),

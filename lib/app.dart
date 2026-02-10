@@ -45,9 +45,13 @@ import 'screens/landlord/landlord_dashboard_screen.dart';
 
 // Shared Screens - Notifications
 import 'screens/shared/messages_screen.dart';
+import 'screens/shared/chat_screen.dart';
 import 'screens/shared/notifications_screen.dart';
 import 'screens/shared/notifications_details_screen.dart';
 import 'screens/shared/notifications_settings_screen.dart';
+
+// Import models for chat routing
+import 'models/profile.dart';
 
 
 class MyApp extends StatelessWidget {
@@ -171,6 +175,23 @@ class MyApp extends StatelessWidget {
             const NotificationsDetailsScreen(),
         '/notifications_settings': (context) =>
             const NotificationsSettingsScreen(),
+      },
+      
+      // ============ NAMED ROUTE GENERATOR FOR COMPLEX ROUTES ============
+      onGenerateRoute: (settings) {
+        // Handle chat route with arguments
+        if (settings.name == '/chat') {
+          final args = settings.arguments as Map<String, dynamic>;
+          return MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              conversationId: args['conversationId'] as String,
+              otherUser: args['otherUser'] as Profile,
+            ),
+          );
+        }
+        
+        // Return null for routes handled by the routes table
+        return null;
       },
     );
   }

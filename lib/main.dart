@@ -22,9 +22,9 @@ void main() async {
   // Initialize Supabase
   try {
     await SupabaseService.initialize();
-    print('Supabase initialized successfully');
+    debugPrint('Supabase initialized successfully');
   } catch (e) {
-    print('Error initializing Supabase: $e');
+    debugPrint('Error initializing Supabase: $e');
   }
 
   runApp(const MyApp());

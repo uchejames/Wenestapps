@@ -64,7 +64,7 @@ class _LandlordPropertiesScreenState extends State<LandlordPropertiesScreen> wit
         }
       }
     } catch (e) {
-      print('Error loading properties: $e');
+      debugPrint('Error loading properties: $e');
       setState(() => _isLoading = false);
     }
   }

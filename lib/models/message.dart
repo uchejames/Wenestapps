@@ -1,19 +1,26 @@
-// ============= message.dart =============
 class Message {
   final String id;
   final String conversationId;
   final String senderId;
+  final String receiverId;
   final String content;
+  final String? attachmentUrl;
+  final String messageType;
   final bool isRead;
-  final DateTime createdAt;
+  final DateTime sentAt;
+  final DateTime? updatedAt; // Changed to nullable
 
   Message({
     required this.id,
     required this.conversationId,
     required this.senderId,
+    required this.receiverId,
     required this.content,
+    this.attachmentUrl,
+    this.messageType = 'text',
     this.isRead = false,
-    required this.createdAt,
+    required this.sentAt,
+    this.updatedAt, // No longer required
   });
 
   factory Message.fromJson(Map<String, dynamic> json) {
@@ -21,9 +28,15 @@ class Message {
       id: json['id'] as String,
       conversationId: json['conversation_id'] as String,
       senderId: json['sender_id'] as String,
-      content: json['content'] as String,
+      receiverId: json['receiver_id'] as String,
+      content: json['content'] as String? ?? '',
+      attachmentUrl: json['attachment_url'] as String?,
+      messageType: json['message_type'] as String? ?? 'text',
       isRead: json['is_read'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String),
+      sentAt: DateTime.parse(json['sent_at'] as String),
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'] as String)
+          : null, // Handle null
     );
   }
 
@@ -32,9 +45,39 @@ class Message {
       'id': id,
       'conversation_id': conversationId,
       'sender_id': senderId,
+      'receiver_id': receiverId,
       'content': content,
+      'attachment_url': attachmentUrl,
+      'message_type': messageType,
       'is_read': isRead,
-      'created_at': createdAt.toIso8601String(),
+      'sent_at': sentAt.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(), // Handle null
     };
+  }
+
+  // Helper getter to check if current user is sender
+  bool isSentByMe(String currentUserId) {
+    return senderId == currentUserId;
+  }
+
+  // Backward compatibility - map createdAt to sentAt
+  DateTime get createdAt => sentAt;
+
+  // Format time for display
+  String get timeDisplay {
+    final now = DateTime.now();
+    final difference = now.difference(sentAt);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${sentAt.day}/${sentAt.month}/${sentAt.year}';
+    }
   }
 }

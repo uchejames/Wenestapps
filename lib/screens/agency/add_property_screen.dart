@@ -179,7 +179,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         });
       }
     } catch (e) {
-      print('Error uploading images: $e');
+      debugPrint('Error uploading images: $e');
       rethrow;
     } finally {
       setState(() => _isUploadingImages = false);
