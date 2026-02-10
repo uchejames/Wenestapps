@@ -263,6 +263,10 @@ View on WeNest: https://wenest.app/property/${_property!.id}
     return images.map((media) => media.fileUrl).toList();
   }
 
+  List<PropertyMedia> get _videoMedia {
+    return _propertyMedia.where((m) => m.isVideo).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -769,6 +773,156 @@ View on WeNest: https://wenest.app/property/${_property!.id}
       ),
     );
   }
+
+  Widget _buildVideoSection() {
+    if (_videoMedia.isEmpty) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Property Video Tour',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textColor,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(
+            height: 220,
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    color: Colors.grey.shade900,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.videocam_rounded,
+                            size: 64,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Property Video Tour',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.7),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          final url = Uri.parse(_videoMedia.first.fileUrl);
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } else {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Could not open video'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.3),
+                              ],
+                            ),
+                          ),
+                          child: Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(20),
+                              decoration: BoxDecoration(
+                                color: AppColors.primaryColor.withValues(alpha: 0.9),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppColors.primaryColor.withValues(alpha: 0.4),
+                                    blurRadius: 20,
+                                    spreadRadius: 2,
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(
+                                Icons.play_arrow_rounded,
+                                size: 48,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 16,
+                    right: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.7),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.play_circle_outline, color: Colors.white, size: 16),
+                          SizedBox(width: 6),
+                          Text(
+                            'Play Video',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
 
   bool _hasPropertyStats() {
     return (_property!.bedrooms != null && _property!.bedrooms! > 0) ||

@@ -159,14 +159,10 @@ class SupabaseService {
           .select()
           .eq('property_id', propertyId)
           .order('is_primary', ascending: false)  // Primary images first
-          .order('display_order', ascending: true);  // Then by display order
-
-      if (response is! List) {
-        return [];
-      }
+          .order('display_order', ascending: true);
 
       return response
-          .map((json) => PropertyMedia.fromJson(json as Map<String, dynamic>))
+          .map((json) => PropertyMedia.fromJson(json))
           .toList();
     } catch (e) {
       debugPrint('Error fetching property media: $e');
@@ -663,7 +659,9 @@ class SupabaseService {
         query = query.eq('is_approved', true).eq('status', 'active');
       } else {
         // For owners, show their properties regardless of approval status
-        if (status != null) query = query.eq('status', status);
+        if (agentId != null) query = query.eq('agent_id', agentId);
+        if (landlordId != null) query = query.eq('landlord_id', landlordId);
+        if (agencyId != null) query = query.eq('agency_id', agencyId);
       }
 
       if (propertyType != null) query = query.eq('property_type', propertyType);

@@ -49,10 +49,22 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
   Future<void> _loadProperties() async {
     setState(() => _isLoading = true);
     try {
+      debugPrint('🔄 Loading all properties for agent: ${widget.agent.id}');
+      
+      // IMPORTANT: Don't pass status parameter - we want ALL statuses
       final properties = await _supabaseService.getPropertiesWithMedia(
         agentId: widget.agent.id,
         limit: 1000,
       );
+
+      debugPrint('📦 Loaded ${properties.length} total properties');
+      
+      // Show status breakdown for debugging
+      final statusCounts = <String, int>{};
+      for (var prop in properties) {
+        statusCounts[prop.status] = (statusCounts[prop.status] ?? 0) + 1;
+      }
+      debugPrint('📊 Status breakdown: $statusCounts');
 
       setState(() {
         _allProperties = properties;
@@ -60,43 +72,67 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('❌ Error loading properties: $e');
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading properties: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error loading properties: $e'), 
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     }
   }
 
+
   void _filterByTab() {
     List<Property> filtered = _allProperties;
 
+    debugPrint('📊 Total properties loaded: ${_allProperties.length}');
+    
     // Filter by tab
     switch (_tabController.index) {
       case 0: // All
+        debugPrint('🔍 Tab: All - Showing all ${filtered.length} properties');
         break;
       case 1: // Active
         filtered = filtered.where((p) => p.status == 'active').toList();
+        debugPrint('🟢 Tab: Active - Found ${filtered.length} active properties');
         break;
       case 2: // Draft
         filtered = filtered.where((p) => p.status == 'draft').toList();
+        debugPrint('📝 Tab: Draft - Found ${filtered.length} draft properties');
         break;
       case 3: // Sold/Rented
         filtered = filtered.where((p) => p.status == 'sold' || p.status == 'rented').toList();
+        debugPrint('✅ Tab: Sold/Rented - Found ${filtered.length} sold/rented properties');
         break;
       case 4: // Inactive
         filtered = filtered.where((p) => p.status == 'inactive').toList();
+        debugPrint('⏸️  Tab: Inactive - Found ${filtered.length} inactive properties');
+        
+        // Debug: Show all property statuses for troubleshooting
+        if (filtered.isEmpty && _allProperties.isNotEmpty) {
+          debugPrint('⚠️  WARNING: No inactive properties found!');
+          debugPrint('📋 All property statuses:');
+          for (var prop in _allProperties) {
+            debugPrint('  - "${prop.title}": status="${prop.status}"');
+          }
+        }
         break;
     }
 
-    // Apply search
+    // Apply search filter
     if (_searchQuery.isNotEmpty) {
+      final beforeSearch = filtered.length;
       filtered = filtered.where((p) {
         return p.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-               p.cityArea.toLowerCase().contains(_searchQuery.toLowerCase()) ||
-               p.state.toLowerCase().contains(_searchQuery.toLowerCase());
+              p.cityArea.toLowerCase().contains(_searchQuery.toLowerCase()) ||
+              p.state.toLowerCase().contains(_searchQuery.toLowerCase());
       }).toList();
+      debugPrint('🔎 Search "$_searchQuery": $beforeSearch → ${filtered.length} properties');
     }
 
     // Apply sorting
@@ -115,8 +151,10 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
         filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     }
 
+    debugPrint('✨ Final filtered & sorted count: ${filtered.length}');
     setState(() => _displayedProperties = filtered);
   }
+
 
   void _onSearchChanged(String query) {
     setState(() => _searchQuery = query);
@@ -190,27 +228,66 @@ class _MyPropertiesScreenState extends State<MyPropertiesScreen> with SingleTick
   Future<void> _togglePropertyStatus(Property property) async {
     try {
       final newStatus = property.status == 'active' ? 'inactive' : 'active';
+      
+      debugPrint('🔄 Toggling property "${property.title}" from ${property.status} to $newStatus');
+      
       await _supabaseService.updateProperty(
         propertyId: property.id.toString(),
         status: newStatus,
       );
+      
+      debugPrint('✅ Property status updated successfully');
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Property marked as ${newStatus.toUpperCase()}'),
-            backgroundColor: Colors.green,
+            content: Row(
+              children: [
+                Icon(
+                  newStatus == 'inactive' ? Icons.pause_circle_rounded : Icons.play_circle_rounded,
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    newStatus == 'inactive' 
+                      ? 'Property marked as INACTIVE\nHidden from public view' 
+                      : 'Property marked as ACTIVE\nNow visible to buyers',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: newStatus == 'inactive' ? Colors.orange.shade700 : Colors.green.shade700,
+            duration: const Duration(seconds: 4),
+            behavior: SnackBarBehavior.floating,
           ),
         );
-        _loadProperties();
+        
+        // Reload properties
+        await _loadProperties();
+        
+        // Switch to the appropriate tab to show the property
+        if (newStatus == 'inactive') {
+          _tabController.animateTo(4); // Switch to Inactive tab
+        } else {
+          _tabController.animateTo(1); // Switch to Active tab
+        }
       }
     } catch (e) {
+      debugPrint('❌ Error updating property status: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error updating property: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error updating property: $e'), 
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
         );
       }
     }
   }
+
 
   void _showPropertyActions(Property property) {
     showModalBottomSheet(

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agency.dart';

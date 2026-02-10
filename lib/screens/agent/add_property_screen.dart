@@ -423,7 +423,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   },
                   style: OutlinedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: BorderSide(color: AppColors.primaryColor),
+                    side: const BorderSide(color: AppColors.primaryColor),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                   child: const Text('Back'),
@@ -526,7 +526,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   const Text('Property Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _propertyType,
+                    initialValue: _propertyType,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -555,7 +555,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                   const Text('Listing Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _listingType,
+                    initialValue: _listingType,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(10),
@@ -722,7 +722,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         const Text('Furnishing Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _furnishingStatus,
+          initialValue: _furnishingStatus,
           decoration: InputDecoration(
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(10),

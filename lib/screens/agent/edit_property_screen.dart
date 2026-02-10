@@ -48,9 +48,12 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   int _currentStep = 0;
 
   // Media management
-  final List<String> _existingMediaUrls = [];
-  final List<XFile> _newImages = [];
-  final List<String> _mediaToDelete = [];
+  final List _existingMediaUrls = [];
+  final List _newImages = [];
+  XFile? _newVideo;
+  final List _mediaToDelete = [];
+  String? _existingVideoUrl;
+  bool _deleteExistingVideo = false;
 
   @override
   void initState() {
@@ -74,8 +77,14 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     _furnishingStatus = widget.property.furnishingStatus ?? 'unfurnished';
     _negotiable = widget.property.negotiable;
 
-    // Load existing media
-    _existingMediaUrls.addAll(widget.property.media.map((m) => m.fileUrl));
+    // Load existing media - IMAGES (THIS WAS MISSING!)
+    _existingMediaUrls.addAll(widget.property.media.where((m) => m.isImage).map((m) => m.fileUrl));
+    
+    // Load existing media - VIDEO
+    final existingVideo = widget.property.media.where((m) => m.isVideo).firstOrNull;
+    if (existingVideo != null) {
+      _existingVideoUrl = existingVideo.fileUrl;
+    }
   }
 
   @override
@@ -133,6 +142,55 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     });
   }
 
+  Future _pickVideo() async {
+    try {
+      final XFile? video = await _imagePicker.pickVideo(
+        source: ImageSource.gallery,
+        maxDuration: const Duration(minutes: 2),
+      );
+      
+      if (video != null) {
+        final fileSize = await File(video.path).length();
+        const maxSize = 100 * 1024 * 1024; // 100MB
+        
+        if (fileSize > maxSize) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Video size must be less than 100MB'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+        
+        setState(() {
+          _newVideo = video;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error picking video: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _removeNewVideo() {
+    setState(() {
+      _newVideo = null;
+    });
+  }
+
+  void _removeExistingVideo() {
+    setState(() {
+      _deleteExistingVideo = true;
+      _existingVideoUrl = null;
+    });
+  }
+
   Future<void> _updateProperty() async {
     if (!_formKey.currentState!.validate()) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -181,6 +239,24 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         final mediaToDelete = widget.property.media.where((m) => m.fileUrl == mediaUrl).firstOrNull;
         if (mediaToDelete != null) {
           await _supabaseService.deletePropertyMedia(mediaToDelete.id);
+        }
+      }
+
+      // Upload new video
+      if (_newVideo != null) {
+        await _supabaseService.uploadPropertyMedia(
+          propertyId: widget.property.id,
+          file: File(_newVideo!.path),
+          mediaType: 'video',
+          displayOrder: 0,
+        );
+      }
+
+      // Delete existing video if marked for deletion
+      if (_deleteExistingVideo && _existingVideoUrl != null) {
+        final videoToDelete = widget.property.media.where((m) => m.fileUrl == _existingVideoUrl).firstOrNull;
+        if (videoToDelete != null) {
+          await _supabaseService.deletePropertyMedia(videoToDelete.id);
         }
       }
 
@@ -433,7 +509,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                   const Text('Property Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _propertyType,
+                    initialValue: _propertyType,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -460,7 +536,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                   const Text('Listing Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _listingType,
+                    initialValue: _listingType,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -687,7 +763,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                   const Text('Furnishing', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
-                    value: _furnishingStatus,
+                    initialValue: _furnishingStatus,
                     decoration: InputDecoration(
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -738,15 +814,19 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         const Text('Property Media', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Text(
-          'Manage property images ($totalImages/10)',
+          'Manage property images ($totalImages/10) and video',
           style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
         ),
         const SizedBox(height: 20),
         
+        // IMAGES SECTION
+        const Text('Images', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 12),
+        
         // Existing Images
         if (_existingMediaUrls.isNotEmpty) ...[
-          const Text('Current Images', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
+          const Text('Current Images', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey)),
+          const SizedBox(height: 8),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -787,13 +867,13 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
         ],
         
         // New Images
         if (_newImages.isNotEmpty) ...[
-          const Text('New Images', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 12),
+          const Text('New Images', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey)),
+          const SizedBox(height: 8),
           GridView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -834,7 +914,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
               );
             },
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
         ],
         
         // Add Images Button
@@ -845,7 +925,110 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
             label: const Text('Add More Images'),
             style: OutlinedButton.styleFrom(
               minimumSize: const Size(double.infinity, 50),
-              side: BorderSide(color: AppColors.primaryColor),
+              side: const BorderSide(color: AppColors.primaryColor),
+            ),
+          ),
+        
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 16),
+        
+        // VIDEO SECTION
+        const Text('Property Video (Optional)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        Text(
+          'Add a video tour (max 100MB, 2 minutes)',
+          style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        
+        // Existing Video
+        if (_existingVideoUrl != null && !_deleteExistingVideo) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.video_library_rounded, color: Colors.blue.shade700, size: 28),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Current Video', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text('Existing property video', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _removeExistingVideo,
+                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        
+        // New Video
+        if (_newVideo != null) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.shade200),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.videocam_rounded, color: Colors.green.shade700, size: 28),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('New Video', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                      Text(_newVideo!.name, style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: _removeNewVideo,
+                  icon: const Icon(Icons.close_rounded, color: Colors.red),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+        
+        // Add Video Button
+        if (_newVideo == null && (_existingVideoUrl == null || _deleteExistingVideo))
+          OutlinedButton.icon(
+            onPressed: _pickVideo,
+            icon: const Icon(Icons.videocam_rounded),
+            label: const Text('Add Video'),
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(double.infinity, 50),
+              side: const BorderSide(color: AppColors.primaryColor),
             ),
           ),
         
