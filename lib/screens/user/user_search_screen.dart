@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:wenest/utils/constants.dart';
+import 'package:wenest/utils/nigerian_locations.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/property.dart';
 
 class UserSearchScreen extends StatefulWidget {
-  const UserSearchScreen({super.key});
+  final Map<String, dynamic>? initialFilters;
+  
+  const UserSearchScreen({super.key, this.initialFilters});
 
   @override
   State<UserSearchScreen> createState() => _UserSearchScreenState();
@@ -23,6 +27,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
   String? _selectedPropertyType;
   String? _selectedListingType;
   String? _selectedState;
+  String? _selectedCity;
   String? _selectedFurnishing;
   double _minPrice = 0;
   double _maxPrice = 100000000;
@@ -32,6 +37,16 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
   bool? _negotiableOnly;
   bool? _featuredOnly;
   bool? _verifiedOnly;
+
+  final List<Map<String, dynamic>> _quickFilters = [
+    {'label': 'Rent', 'type': 'listing', 'value': 'rent', 'icon': Icons.key_rounded},
+    {'label': 'Buy', 'type': 'listing', 'value': 'sale', 'icon': Icons.home_rounded},
+    {'label': 'Shortlet', 'type': 'listing', 'value': 'shortlet', 'icon': Icons.weekend_rounded},
+    {'label': 'Land', 'type': 'property', 'value': 'land', 'icon': Icons.landscape_rounded},
+    {'label': 'Apartment', 'type': 'property', 'value': 'apartment', 'icon': Icons.apartment_rounded},
+    {'label': 'House', 'type': 'property', 'value': 'house', 'icon': Icons.house_rounded},
+    {'label': 'Commercial', 'type': 'property', 'value': 'commercial', 'icon': Icons.business_rounded},
+  ];
 
   final List<String> _propertyTypes = [
     'apartment',
@@ -50,17 +65,6 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
     'shortlet',
   ];
 
-  final List<String> _states = [
-    'Lagos',
-    'Abuja',
-    'Rivers',
-    'Oyo',
-    'Kano',
-    'Delta',
-    'Enugu',
-    'Anambra',
-  ];
-
   final List<String> _furnishingOptions = [
     'unfurnished',
     'semi-furnished',
@@ -70,6 +74,13 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // Apply initial filters if provided
+    if (widget.initialFilters != null) {
+      _selectedListingType = widget.initialFilters!['listingType'];
+      _selectedPropertyType = widget.initialFilters!['propertyType'];
+    }
+    
     _loadProperties();
     _searchController.addListener(_applyFilters);
   }
@@ -91,6 +102,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
         propertyType: _selectedPropertyType,
         listingType: _selectedListingType,
         state: _selectedState,
+        cityArea: _selectedCity,
         minPrice: _minPrice > 0 ? _minPrice : null,
         maxPrice: _maxPrice < 100000000 ? _maxPrice : null,
         minBedrooms: _minBedrooms,
@@ -112,7 +124,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error loading properties: $e'),
-            backgroundColor: Colors.red,
+            backgroundColor: AppColors.errorColor,
           ),
         );
       }
@@ -171,6 +183,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
       _selectedPropertyType = null;
       _selectedListingType = null;
       _selectedState = null;
+      _selectedCity = null;
       _selectedFurnishing = null;
       _minPrice = 0;
       _maxPrice = 100000000;
@@ -185,11 +198,31 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
     _loadProperties();
   }
 
+  void _applyQuickFilter(Map<String, dynamic> filter) {
+    setState(() {
+      if (filter['type'] == 'listing') {
+        if (_selectedListingType == filter['value']) {
+          _selectedListingType = null;
+        } else {
+          _selectedListingType = filter['value'];
+        }
+      } else if (filter['type'] == 'property') {
+        if (_selectedPropertyType == filter['value']) {
+          _selectedPropertyType = null;
+        } else {
+          _selectedPropertyType = filter['value'];
+        }
+      }
+    });
+    _loadProperties();
+  }
+
   int _getActiveFiltersCount() {
     int count = 0;
     if (_selectedPropertyType != null) count++;
     if (_selectedListingType != null) count++;
     if (_selectedState != null) count++;
+    if (_selectedCity != null) count++;
     if (_selectedFurnishing != null) count++;
     if (_minPrice > 0 || _maxPrice < 100000000) count++;
     if (_minBedrooms != null || _maxBedrooms != null) count++;
@@ -200,10 +233,16 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
     return count;
   }
 
+  String _formatText(String text) {
+    return text.split('-').map((word) => 
+      word[0].toUpperCase() + word.substring(1)
+    ).join(' ');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -225,12 +264,12 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
           children: [
             // Search Bar + Filter Button
             Container(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
               decoration: BoxDecoration(
                 color: Colors.white,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withAlpha(8), // replaced withValues(alpha: 0.03)
+                    color: Colors.black.withValues(alpha: 0.03),
                     blurRadius: 10,
                     offset: const Offset(0, 2),
                   ),
@@ -242,66 +281,62 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
+                        color: AppColors.backgroundColor,
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search location, property...',
-                          hintStyle:
-                              TextStyle(color: Colors.grey.shade500, fontSize: 15),
-                          prefixIcon: Icon(Icons.search_rounded,
-                              color: Colors.grey.shade400, size: 22),
-                          border: InputBorder.none,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 14),
+                        border: Border.all(
+                          color: Colors.grey.shade200,
+                          width: 1,
                         ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.search_rounded, color: Colors.grey.shade400, size: 22),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                hintText: 'Search location, property...',
+                                hintStyle: TextStyle(
+                                  color: Colors.grey.shade500,
+                                  fontSize: 14,
+                                ),
+                                border: InputBorder.none,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          if (_searchController.text.isNotEmpty)
+                            GestureDetector(
+                              onTap: () => _searchController.clear(),
+                              child: Icon(Icons.clear, color: Colors.grey.shade400, size: 20),
+                            ),
+                        ],
                       ),
                     ),
                   ),
                   const SizedBox(width: 12),
                   GestureDetector(
-                    onTap: () => _showFilterBottomSheet(),
+                    onTap: _showFilterSheet,
                     child: Container(
-                      padding: const EdgeInsets.all(14),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: AppColors.primaryColor,
                         borderRadius: BorderRadius.circular(14),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primaryColor.withAlpha(77), // 0.3 * 255 ≈ 77
+                            color: AppColors.primaryColor.withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: Stack(
-                        children: [
-                          const Icon(Icons.tune_rounded,
-                              color: Colors.white, size: 22),
-                          if (_getActiveFiltersCount() > 0)
-                            Positioned(
-                              right: -4,
-                              top: -4,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: const BoxDecoration(
-                                  color: AppColors.accentColor,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  '${_getActiveFiltersCount()}',
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                      child: Badge(
+                        isLabelVisible: _getActiveFiltersCount() > 0,
+                        label: Text('${_getActiveFiltersCount()}'),
+                        backgroundColor: AppColors.accentColor,
+                        child: const Icon(Icons.tune_rounded, color: Colors.white, size: 22),
                       ),
                     ),
                   ),
@@ -309,104 +344,100 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
               ),
             ),
 
-            // Active Filter Chips
-            if (_getActiveFiltersCount() > 0)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      if (_selectedPropertyType != null)
-                        _buildFilterChip(_formatText(_selectedPropertyType!), () {
-                          setState(() => _selectedPropertyType = null);
-                          _loadProperties();
-                        }),
-                      if (_selectedListingType != null)
-                        _buildFilterChip(
-                            'For ${_formatText(_selectedListingType!)}', () {
-                          setState(() => _selectedListingType = null);
-                          _loadProperties();
-                        }),
-                      if (_selectedState != null)
-                        _buildFilterChip(_selectedState!, () {
-                          setState(() => _selectedState = null);
-                          _loadProperties();
-                        }),
-                      if (_minBedrooms != null || _maxBedrooms != null)
-                        _buildFilterChip(
-                            '${_minBedrooms ?? 0}-${_maxBedrooms ?? "Any"} Beds',
-                            () {
-                          setState(() {
-                            _minBedrooms = null;
-                            _maxBedrooms = null;
-                          });
-                          _loadProperties();
-                        }),
-                      if (_minBathrooms != null)
-                        _buildFilterChip('$_minBathrooms+ Baths', () {
-                          setState(() => _minBathrooms = null);
-                          _applyFilters();
-                        }),
-                      if (_negotiableOnly == true)
-                        _buildFilterChip('Negotiable', () {
-                          setState(() => _negotiableOnly = null);
-                          _applyFilters();
-                        }),
-                      if (_verifiedOnly == true)
-                        _buildFilterChip('Verified', () {
-                          setState(() => _verifiedOnly = null);
-                          _applyFilters();
-                        }),
-                      // Clear All
-                      GestureDetector(
-                        onTap: _clearFilters,
+            // Quick Filter Buttons
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: Border(
+                  bottom: BorderSide(
+                    color: Colors.grey.shade200,
+                    width: 1,
+                  ),
+                ),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(
+                  children: _quickFilters.map((filter) {
+                    final bool isActive = (filter['type'] == 'listing' && 
+                                           _selectedListingType == filter['value']) ||
+                                          (filter['type'] == 'property' && 
+                                           _selectedPropertyType == filter['value']);
+                    
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () => _applyQuickFilter(filter),
                         child: Container(
-                          margin: const EdgeInsets.only(left: 8),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.red.shade50,
+                            color: isActive 
+                                ? AppColors.primaryColor 
+                                : AppColors.backgroundColor,
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.red.shade200),
+                            border: Border.all(
+                              color: isActive 
+                                  ? AppColors.primaryColor 
+                                  : Colors.grey.shade300,
+                              width: 1.5,
+                            ),
                           ),
                           child: Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.close_rounded,
-                                  size: 14, color: Colors.red.shade700),
-                              const SizedBox(width: 4),
+                              Icon(
+                                filter['icon'] as IconData,
+                                size: 16,
+                                color: isActive ? Colors.white : AppColors.textColor,
+                              ),
+                              const SizedBox(width: 6),
                               Text(
-                                'Clear All',
+                                filter['label'] as String,
                                 style: TextStyle(
-                                  color: Colors.red.shade700,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
+                                  color: isActive ? Colors.white : AppColors.textColor,
+                                  fontWeight: isActive ? FontWeight.w600 : FontWeight.w500,
+                                  fontSize: 13,
                                 ),
                               ),
                             ],
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    );
+                  }).toList(),
                 ),
               ),
+            ),
 
             // Results Count
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              color: AppColors.backgroundColor,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
                     '${_filteredProperties.length} properties found',
                     style: TextStyle(
-                      color: Colors.grey.shade700,
                       fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey.shade700,
                     ),
                   ),
+                  if (_getActiveFiltersCount() > 0)
+                    TextButton.icon(
+                      onPressed: _clearFilters,
+                      icon: const Icon(Icons.clear, size: 16),
+                      label: const Text('Clear filters'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primaryColor,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -414,22 +445,20 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
             // Properties Grid
             Expanded(
               child: _isLoading
-                  ? _buildShimmerGrid()
+                  ? _buildLoadingGrid()
                   : _filteredProperties.isEmpty
                       ? _buildEmptyState()
                       : GridView.builder(
                           padding: const EdgeInsets.all(20),
-                          gridDelegate:
-                              const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
-                            childAspectRatio: 0.7,
+                            childAspectRatio: 0.68,
                             crossAxisSpacing: 16,
                             mainAxisSpacing: 16,
                           ),
                           itemCount: _filteredProperties.length,
                           itemBuilder: (context, index) {
-                            return _buildPropertyCard(
-                                _filteredProperties[index]);
+                            return _buildPropertyGridCard(_filteredProperties[index]);
                           },
                         ),
             ),
@@ -439,42 +468,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
     );
   }
 
-  Widget _buildFilterChip(String label, VoidCallback onRemove) {
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppColors.primaryColor.withAlpha(26), // ~0.1 opacity
-        borderRadius: BorderRadius.circular(20),
-        border:
-            Border.all(color: AppColors.primaryColor.withAlpha(77)), // ~0.3
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppColors.primaryColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 6),
-          GestureDetector(
-            onTap: onRemove,
-            child: const Icon(
-              Icons.close_rounded,
-              size: 14,
-              color: AppColors.primaryColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPropertyCard(Property property) {
+  Widget _buildPropertyGridCard(Property property) {
     return GestureDetector(
       onTap: () {
         Navigator.pushNamed(context, '/property_detail', arguments: property.id);
@@ -483,183 +477,177 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(10),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: Colors.black.withValues(alpha: 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Image Section - UPDATED TO USE REAL IMAGES
-            Stack(
-              children: [
-                Container(
-                  height: 120,
-                  decoration: const BoxDecoration(
-                    color: AppColors.backgroundColor,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                  ),
-                  child: property.primaryImageUrl != null
-                      ? ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                          child: Image.network(
-                            property.primaryImageUrl!,
+            // Property Image
+            Expanded(
+              flex: 5,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                child: Stack(
+                  children: [
+                    property.primaryImageUrl != null
+                        ? CachedNetworkImage(
+                            imageUrl: property.primaryImageUrl!,
                             width: double.infinity,
-                            height: 120,
+                            height: double.infinity,
                             fit: BoxFit.cover,
-                            loadingBuilder: (context, child, loadingProgress) {
-                              if (loadingProgress == null) return child;
-                              return Center(
+                            placeholder: (context, url) => Container(
+                              color: Colors.grey.shade200,
+                              child: Center(
                                 child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes != null
-                                      ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                      : null,
                                   strokeWidth: 2,
                                   color: AppColors.primaryColor,
                                 ),
-                              );
-                            },
-                            errorBuilder: (context, error, stackTrace) {
-                              return Center(
-                                child: Icon(
-                                  Icons.home_rounded,
-                                  size: 40,
-                                  color: AppColors.primaryColor.withAlpha(51),
+                              ),
+                            ),
+                            errorWidget: (context, url, error) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(
+                                Icons.home_rounded,
+                                size: 30,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                        : Container(
+                            color: Colors.grey.shade200,
+                            child: const Center(
+                              child: Icon(
+                                Icons.home_rounded,
+                                size: 30,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ),
+                    // Listing Type Badge
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          property.listingTypeDisplay,
+                          style: const TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Featured Badge
+                    if (property.isFeatured)
+                      Positioned(
+                        top: 8,
+                        left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.accentColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.star, size: 10, color: Colors.white),
+                              SizedBox(width: 3),
+                              Text(
+                                'Featured',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
                                 ),
-                              );
-                            },
-                          ),
-                        )
-                      : Center(
-                          child: Icon(
-                            Icons.home_rounded,
-                            size: 40,
-                            color: AppColors.primaryColor.withAlpha(51),
+                              ),
+                            ],
                           ),
                         ),
+                      ),
+                  ],
                 ),
-                // Listing Type Badge
-                Positioned(
-                  top: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getListingTypeColor(property.listingType),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      property.listingTypeDisplay,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-                // Featured Badge
-                if (property.isFeatured)
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: AppColors.accentColor,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: const Text(
-                        'FEATURED',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+              ),
             ),
-            // Details Section (rest stays the same)
+            // Property Details
             Expanded(
+              flex: 4,
               child: Padding(
                 padding: const EdgeInsets.all(10),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      property.formattedPrice,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryColor,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      property.title,
-                      style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textColor,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(Icons.location_on_rounded, size: 12, color: Colors.grey.shade500),
-                        const SizedBox(width: 2),
-                        Expanded(
-                          child: Text(
-                            property.locationDisplay,
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        Text(
+                          property.formattedPrice,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primaryColor,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          property.title,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textColor,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on_rounded, size: 12, color: Colors.grey.shade600),
+                            const SizedBox(width: 3),
+                            Expanded(
+                              child: Text(
+                                property.locationDisplay,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.grey.shade600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const Spacer(),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryColor.withAlpha(20),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        property.propertyTypeDisplay,
-                        style: const TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryColor,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
                     Row(
                       children: [
                         if (property.bedrooms != null && property.bedrooms! > 0) ...[
                           Icon(Icons.bed_rounded, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 2),
-                          Text('${property.bedrooms}', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+                          const SizedBox(width: 3),
+                          Text('${property.bedrooms}', 
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
                           const SizedBox(width: 8),
                         ],
                         if (property.bathrooms != null && property.bathrooms! > 0) ...[
                           Icon(Icons.bathtub_rounded, size: 14, color: Colors.grey.shade600),
-                          const SizedBox(width: 2),
-                          Text('${property.bathrooms}', style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
+                          const SizedBox(width: 3),
+                          Text('${property.bathrooms}', 
+                            style: TextStyle(fontSize: 11, color: Colors.grey.shade700)),
                         ],
                       ],
                     ),
@@ -673,57 +661,12 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
     );
   }
 
-  Color _getListingTypeColor(String listingType) {
-    switch (listingType.toLowerCase()) {
-      case 'sale':
-        return Colors.green;
-      case 'rent':
-        return Colors.blue;
-      case 'lease':
-        return Colors.orange;
-      case 'shortlet':
-        return Colors.purple;
-      default:
-        return AppColors.primaryColor;
-    }
-  }
-
-  String _formatText(String text) {
-    return text[0].toUpperCase() + text.substring(1).replaceAll('-', ' ');
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search_off_rounded,
-              size: 80, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          const Text(
-            'No properties found',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Try adjusting your filters',
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 14),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShimmerGrid() {
+  Widget _buildLoadingGrid() {
     return GridView.builder(
       padding: const EdgeInsets.all(20),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 2,
-        childAspectRatio: 0.7,
+        childAspectRatio: 0.68,
         crossAxisSpacing: 16,
         mainAxisSpacing: 16,
       ),
@@ -743,13 +686,60 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
     );
   }
 
-  void _showFilterBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) {
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off_rounded, size: 80, color: Colors.grey.shade300),
+          const SizedBox(height: 16),
+          Text(
+            'No properties found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Try adjusting your filters',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade500,
+            ),
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: _clearFilters,
+            icon: const Icon(Icons.refresh_rounded),
+            label: const Text('Clear Filters'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryColor,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // CONTINUE IN PART 2...
+
+// Add these methods to the _UserSearchScreenState class
+
+void _showFilterSheet() {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (context) {
+      return StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) {
           return Container(
             height: MediaQuery.of(context).size.height * 0.9,
             decoration: const BoxDecoration(
@@ -760,10 +750,17 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
               children: [
                 // Header
                 Container(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    border:
-                        Border(bottom: BorderSide(color: Colors.grey.shade200)),
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 10,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -773,41 +770,49 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.primaryColor,
+                          color: AppColors.textColor,
                         ),
                       ),
-                      TextButton(
-                        onPressed: () {
-                          setModalState(() {
-                            _selectedPropertyType = null;
-                            _selectedListingType = null;
-                            _selectedState = null;
-                            _selectedFurnishing = null;
-                            _minPrice = 0;
-                            _maxPrice = 100000000;
-                            _minBedrooms = null;
-                            _maxBedrooms = null;
-                            _minBathrooms = null;
-                            _negotiableOnly = null;
-                            _featuredOnly = null;
-                            _verifiedOnly = null;
-                          });
-                        },
-                        child: const Text(
-                          'Reset All',
-                          style: TextStyle(color: Colors.grey),
-                        ),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: () {
+                              setModalState(() {
+                                _selectedPropertyType = null;
+                                _selectedListingType = null;
+                                _selectedState = null;
+                                _selectedCity = null;
+                                _selectedFurnishing = null;
+                                _minPrice = 0;
+                                _maxPrice = 100000000;
+                                _minBedrooms = null;
+                                _maxBedrooms = null;
+                                _minBathrooms = null;
+                                _negotiableOnly = null;
+                                _featuredOnly = null;
+                                _verifiedOnly = null;
+                              });
+                            },
+                            child: const Text('Clear All'),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                // Scrollable content
+                
+                // Filter Content
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(20),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        // Property Type
                         _buildFilterSection(
                           'Property Type',
                           Wrap(
@@ -828,6 +833,8 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        
+                        // Listing Type
                         _buildFilterSection(
                           'Listing Type',
                           Wrap(
@@ -835,7 +842,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                             runSpacing: 8,
                             children: _listingTypes.map((type) {
                               return _buildSelectableChip(
-                                'For ${_formatText(type)}',
+                                _formatText(type),
                                 _selectedListingType == type,
                                 () {
                                   setModalState(() {
@@ -848,62 +855,163 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        
+                        // Location - State
                         _buildFilterSection(
-                          'Location',
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _states.map((state) {
-                              return _buildSelectableChip(
-                                state,
-                                _selectedState == state,
-                                () {
+                          'State',
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              color: AppColors.backgroundColor,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String?>(
+                                value: _selectedState,
+                                isExpanded: true,
+                                hint: const Text('Select State'),
+                                items: [
+                                  const DropdownMenuItem<String?>(
+                                    value: null,
+                                    child: Text('All States'),
+                                  ),
+                                  ...NigerianLocations.getAllStates().map((state) {
+                                    return DropdownMenuItem<String?>(
+                                      value: state,
+                                      child: Text(state),
+                                    );
+                                  }),
+                                ],
+                                onChanged: (value) {
                                   setModalState(() {
-                                    _selectedState =
-                                        _selectedState == state ? null : state;
+                                    _selectedState = value;
+                                    _selectedCity = null; // Reset city when state changes
                                   });
                                 },
-                              );
-                            }).toList(),
+                              ),
+                            ),
                           ),
                         ),
+                        const SizedBox(height: 16),
+                        
+                        // Location - City
+                        if (_selectedState != null)
+                          _buildFilterSection(
+                            'City/Area',
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                color: AppColors.backgroundColor,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: Colors.grey.shade300),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String?>(
+                                  value: _selectedCity,
+                                  isExpanded: true,
+                                  hint: const Text('Select City/Area'),
+                                  items: [
+                                    const DropdownMenuItem<String?>(
+                                      value: null,
+                                      child: Text('All Cities'),
+                                    ),
+                                    ...NigerianLocations.getCitiesForState(_selectedState!)
+                                        .map((city) {
+                                      return DropdownMenuItem<String?>(
+                                        value: city,
+                                        child: Text(city),
+                                      );
+                                    }),
+                                  ],
+                                  onChanged: (value) {
+                                    setModalState(() {
+                                      _selectedCity = value;
+                                    });
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
                         const SizedBox(height: 24),
+                        
+                        // Price Range
                         _buildFilterSection(
-                          'Price Range',
+                          'Price Range (₦)',
                           Column(
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    '₦${_minPrice.toInt()}',
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  Expanded(
+                                    child: TextField(
+                                      decoration: InputDecoration(
+                                        labelText: 'Min Price',
+                                        hintText: '0',
+                                        filled: true,
+                                        fillColor: AppColors.backgroundColor,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (value) {
+                                        setModalState(() {
+                                          _minPrice = double.tryParse(value) ?? 0;
+                                        });
+                                      },
+                                    ),
                                   ),
-                                  Text(
-                                    '₦${_maxPrice >= 100000000 ? "100M+" : _maxPrice.toInt()}',
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: TextField(
+                                      decoration: InputDecoration(
+                                        labelText: 'Max Price',
+                                        hintText: 'No limit',
+                                        filled: true,
+                                        fillColor: AppColors.backgroundColor,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                      ),
+                                      keyboardType: TextInputType.number,
+                                      onChanged: (value) {
+                                        setModalState(() {
+                                          _maxPrice = double.tryParse(value) ?? 100000000;
+                                        });
+                                      },
+                                    ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              RangeSlider(
-                                values: RangeValues(_minPrice, _maxPrice),
-                                min: 0,
-                                max: 100000000,
-                                divisions: 100,
-                                activeColor: AppColors.primaryColor,
-                                inactiveColor: Colors.grey.shade300,
-                                onChanged: (values) {
-                                  setModalState(() {
-                                    _minPrice = values.start;
-                                    _maxPrice = values.end;
-                                  });
-                                },
+                              const SizedBox(height: 12),
+                              // Quick price buttons
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  _buildPriceChip('Under 1M', 0, 1000000, setModalState),
+                                  _buildPriceChip('1M - 5M', 1000000, 5000000, setModalState),
+                                  _buildPriceChip('5M - 10M', 5000000, 10000000, setModalState),
+                                  _buildPriceChip('10M - 50M', 10000000, 50000000, setModalState),
+                                  _buildPriceChip('50M+', 50000000, 100000000, setModalState),
+                                ],
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 24),
+                        
+                        // Bedrooms
                         _buildFilterSection(
                           'Bedrooms',
                           Row(
@@ -912,8 +1020,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                                 child: _buildNumberSelector(
                                   'Min',
                                   _minBedrooms,
-                                  (value) =>
-                                      setModalState(() => _minBedrooms = value),
+                                  (value) => setModalState(() => _minBedrooms = value),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -921,14 +1028,15 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                                 child: _buildNumberSelector(
                                   'Max',
                                   _maxBedrooms,
-                                  (value) =>
-                                      setModalState(() => _maxBedrooms = value),
+                                  (value) => setModalState(() => _maxBedrooms = value),
                                 ),
                               ),
                             ],
                           ),
                         ),
                         const SizedBox(height: 24),
+                        
+                        // Bathrooms
                         _buildFilterSection(
                           'Minimum Bathrooms',
                           Wrap(
@@ -949,6 +1057,8 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        
+                        // Furnishing Status
                         _buildFilterSection(
                           'Furnishing Status',
                           Wrap(
@@ -969,6 +1079,8 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        
+                        // Additional Options
                         _buildFilterSection(
                           'Additional Options',
                           Column(
@@ -999,6 +1111,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     ),
                   ),
                 ),
+                
                 // Apply Button
                 Container(
                   padding: const EdgeInsets.all(20),
@@ -1006,7 +1119,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     color: Colors.white,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withAlpha(13), // ~0.05
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, -2),
                       ),
@@ -1019,8 +1132,7 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primaryColor,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 50),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(14),
                       ),
@@ -1039,118 +1151,158 @@ class _UserSearchScreenState extends State<UserSearchScreen> {
             ),
           );
         },
-      ),
-    );
-  }
+      );
+    },
+  );
+}
 
-  Widget _buildFilterSection(String title, Widget content) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+Widget _buildFilterSection(String title, Widget content) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: AppColors.textColor,
+        ),
+      ),
+      const SizedBox(height: 12),
+      content,
+    ],
+  );
+}
+
+Widget _buildSelectableChip(String label, bool isSelected, VoidCallback onTap) {
+  return GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isSelected ? AppColors.primaryColor : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected ? AppColors.primaryColor : Colors.grey.shade300,
+          width: 1.5,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : AppColors.textColor,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          fontSize: 14,
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildPriceChip(
+  String label,
+  double minPrice,
+  double maxPrice,
+  StateSetter setModalState,
+) {
+  final bool isSelected = _minPrice == minPrice && _maxPrice == maxPrice;
+  
+  return GestureDetector(
+    onTap: () {
+      setModalState(() {
+        _minPrice = minPrice;
+        _maxPrice = maxPrice;
+      });
+    },
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: isSelected ? AppColors.primaryColor : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isSelected ? AppColors.primaryColor : Colors.grey.shade300,
+          width: 1.5,
+        ),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.white : AppColors.textColor,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+          fontSize: 13,
+        ),
+      ),
+    ),
+  );
+}
+
+Widget _buildNumberSelector(
+  String label,
+  int? value,
+  Function(int?) onChanged,
+) {
+  return Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: TextStyle(
+          fontSize: 13,
+          color: Colors.grey.shade600,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: AppColors.backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade300),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<int?>(
+            value: value,
+            isExpanded: true,
+            hint: const Text('Any'),
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('Any')),
+              ...List.generate(10, (i) => i + 1)
+                  .map((n) => DropdownMenuItem<int?>(
+                        value: n,
+                        child: Text('$n'),
+                      )),
+            ],
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+    ],
+  );
+}
+
+Widget _buildSwitchOption(String label, bool value, Function(bool) onChanged) {
+  return Padding(
+    padding: const EdgeInsets.symmetric(vertical: 8),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          title,
+          label,
           style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
             color: AppColors.textColor,
           ),
         ),
-        const SizedBox(height: 12),
-        content,
-      ],
-    );
-  }
-
-  Widget _buildSelectableChip(
-      String label, bool isSelected, VoidCallback onTap) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-        decoration: BoxDecoration(
-          color: isSelected ? AppColors.primaryColor : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected ? AppColors.primaryColor : Colors.grey.shade300,
-            width: 1.5,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : AppColors.textColor,
-            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-            fontSize: 14,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNumberSelector(
-      String label, int? value, Function(int?) onChanged) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int?>(
-              value: value,
-              isExpanded: true,
-              hint: const Text('Any'),
-              items: [
-                const DropdownMenuItem<int?>(value: null, child: Text('Any')),
-                ...List.generate(10, (i) => i + 1)
-                    .map((n) => DropdownMenuItem<int?>(
-                          value: n,
-                          child: Text('$n'),
-                        )),
-              ],
-              onChanged: onChanged,
-            ),
-          ),
+        Switch(
+          value: value,
+          onChanged: onChanged,
+          activeTrackColor: AppColors.primaryColor.withValues(alpha: 0.5),
+          activeColor: AppColors.primaryColor,
         ),
       ],
-    );
-  }
-
-  Widget _buildSwitchOption(String label, bool value, Function(bool) onChanged) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w500,
-              color: AppColors.textColor,
-            ),
-          ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeTrackColor: AppColors.primaryColor.withAlpha(128),
-            activeThumbColor: AppColors.primaryColor,
-          ),
-        ],
-      ),
-    );
-  }
+    ),
+  );
+}
 }

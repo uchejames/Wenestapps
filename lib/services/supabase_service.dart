@@ -1187,6 +1187,401 @@ Future<void> removePropertyAmenity({
     }
   }
 
+  Future<bool> isPropertySaved(String userId, String propertyId) async {
+  try {
+    final propertyIdInt = int.parse(propertyId);
+    final response = await client
+        .from('saved_properties')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('property_id', propertyIdInt)
+        .maybeSingle();
+    return response != null;
+  } catch (e) {
+    debugPrint('Error checking if property is saved: $e');
+    return false;
+  }
+}
+
+Future<void> saveProperty(String userId, String propertyId) async {
+  try {
+    final propertyIdInt = int.parse(propertyId);
+    await client.from('saved_properties').insert({
+      'user_id': userId,
+      'property_id': propertyIdInt,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+    // Note: saves_count is updated automatically by trigger
+  } catch (e) {
+    debugPrint('Error saving property: $e');
+    rethrow;
+  }
+}
+
+Future<void> unsaveProperty(String userId, String propertyId) async {
+  try {
+    final propertyIdInt = int.parse(propertyId);
+    await client
+        .from('saved_properties')
+        .delete()
+        .eq('user_id', userId)
+        .eq('property_id', propertyIdInt);
+    // Note: saves_count is updated automatically by trigger
+  } catch (e) {
+    debugPrint('Error unsaving property: $e');
+    rethrow;
+  }
+}
+
+Future<List<Property>> getSavedProperties(String userId) async {
+  try {
+    final response = await client
+        .from('saved_properties')
+        .select('property_id, properties(*)')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+
+    final properties = <Property>[];
+    for (var item in response as List) {
+      if (item['properties'] != null) {
+        final property = Property.fromJson(item['properties']);
+        
+        // Load media for this property
+        final mediaList = await getPropertyMedia(property.id);
+        final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+        final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                               (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
+        
+        properties.add(property.copyWith(
+          media: mediaList,
+          primaryImageUrl: primaryImageUrl,
+        ));
+      }
+    }
+    
+    return properties;
+  } catch (e) {
+    debugPrint('Error getting saved properties: $e');
+    return [];
+  }
+}
+
+// ============ RECENTLY VIEWED PROPERTIES ============
+// CORRECTED: Uses viewer_id (not user_id) to match your schema
+
+Future<void> recordPropertyView(String userId, String propertyId) async {
+  try {
+    final propertyIdInt = int.parse(propertyId);
+    
+    // Check if already viewed recently (within 7 days)
+    final existing = await client
+        .from('property_views')
+        .select('id')
+        .eq('viewer_id', userId)  // CORRECTED: viewer_id
+        .eq('property_id', propertyIdInt)
+        .gte('viewed_at', DateTime.now().subtract(const Duration(days: 7)).toIso8601String())
+        .maybeSingle();
+    
+    if (existing == null) {
+      // Insert new view
+      await client.from('property_views').insert({
+        'viewer_id': userId,  // CORRECTED: viewer_id
+        'property_id': propertyIdInt,
+        'viewed_at': DateTime.now().toIso8601String(),
+      });
+      // Note: views_count is updated automatically by trigger
+    } else {
+      // Update existing view timestamp
+      await client
+          .from('property_views')
+          .update({'viewed_at': DateTime.now().toIso8601String()})
+          .eq('id', existing['id']);
+    }
+  } catch (e) {
+    debugPrint('Error recording property view: $e');
+  }
+}
+
+Future<List<Property>> getRecentlyViewedProperties(String userId, {int limit = 10}) async {
+  try {
+    final response = await client
+        .from('property_views')
+        .select('property_id, properties(*)')
+        .eq('viewer_id', userId)  // CORRECTED: viewer_id
+        .order('viewed_at', ascending: false)
+        .limit(limit);
+
+    final properties = <Property>[];
+    final seenIds = <String>{};
+    
+    for (var item in response as List) {
+      if (item['properties'] != null) {
+        final property = Property.fromJson(item['properties']);
+        
+        // Avoid duplicates
+        if (seenIds.contains(property.id)) continue;
+        seenIds.add(property.id);
+        
+        // Load media
+        final mediaList = await getPropertyMedia(property.id);
+        final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+        final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                               (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
+        
+        properties.add(property.copyWith(
+          media: mediaList,
+          primaryImageUrl: primaryImageUrl,
+        ));
+      }
+    }
+    
+    return properties;
+  } catch (e) {
+    debugPrint('Error getting recently viewed properties: $e');
+    return [];
+  }
+}
+
+// ============ SEARCH HISTORY & FILTERS ============
+
+Future<Map<String, dynamic>?> getLastSearchCriteria(String userId) async {
+  try {
+    final response = await client
+        .from('search_history')
+        .select('search_criteria')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
+        .limit(1)
+        .maybeSingle();
+    
+    if (response != null) {
+      return response['search_criteria'] as Map<String, dynamic>;
+    }
+    return null;
+  } catch (e) {
+    debugPrint('Error getting last search: $e');
+    return null;
+  }
+}
+
+Future<void> saveSearchCriteria(String userId, Map<String, dynamic> criteria) async {
+  try {
+    await client.from('search_history').insert({
+      'user_id': userId,
+      'search_criteria': criteria,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  } catch (e) {
+    debugPrint('Error saving search criteria: $e');
+  }
+}
+
+// ============ RECOMMENDED PROPERTIES (Based on user behavior) ============
+
+Future<List<Property>> getRecommendedProperties(String userId, {int limit = 10}) async {
+  try {
+    // Get user's viewed properties to understand preferences
+    // CORRECTED: Uses viewer_id
+    final viewedResponse = await client
+        .from('property_views')
+        .select('property_id, properties(state, city_area, property_type, listing_type, bedrooms, price)')
+        .eq('viewer_id', userId)  // CORRECTED: viewer_id
+        .order('viewed_at', ascending: false)
+        .limit(20);
+    
+    if (viewedResponse.isEmpty) {
+      // If no history, return featured properties
+      return getProperties(isFeatured: true, limit: limit);
+    }
+    
+    // Analyze user preferences
+    final states = <String>{};
+    final cityAreas = <String>{};
+    final propertyTypes = <String>{};
+    final listingTypes = <String>{};
+    var totalBedrooms = 0;
+    var bedroomCount = 0;
+    var totalPrice = 0.0;
+    var priceCount = 0;
+    
+    for (var item in viewedResponse as List) {
+      final prop = item['properties'];
+      if (prop != null) {
+        if (prop['state'] != null) states.add(prop['state']);
+        if (prop['city_area'] != null) cityAreas.add(prop['city_area']);
+        if (prop['property_type'] != null) propertyTypes.add(prop['property_type']);
+        if (prop['listing_type'] != null) listingTypes.add(prop['listing_type']);
+        if (prop['bedrooms'] != null) {
+          totalBedrooms += prop['bedrooms'] as int;
+          bedroomCount++;
+        }
+        if (prop['price'] != null) {
+          totalPrice += (prop['price'] as num).toDouble();
+          priceCount++;
+        }
+      }
+    }
+    
+    // Build query based on preferences
+    dynamic query = client.from('properties').select();
+    query = query.eq('is_approved', true).eq('status', 'active');
+    
+    // Prefer user's common locations
+    if (states.isNotEmpty) {
+      query = query.in_('state', states.toList());
+    }
+    
+    // Prefer user's common property types
+    if (propertyTypes.isNotEmpty) {
+      query = query.in_('property_type', propertyTypes.toList());
+    }
+    
+    // Prefer user's common listing types
+    if (listingTypes.isNotEmpty) {
+      query = query.in_('listing_type', listingTypes.toList());
+    }
+    
+    // Price range (±30% of average viewed price)
+    if (priceCount > 0) {
+      final avgPrice = totalPrice / priceCount;
+      query = query.gte('price', avgPrice * 0.7).lte('price', avgPrice * 1.3);
+    }
+    
+    final response = await query
+        .order('published_at', ascending: false)
+        .limit(limit);
+    
+    final properties = (response as List).map((data) => Property.fromJson(data)).toList();
+    
+    // Load media for all properties
+    final propertiesWithMedia = <Property>[];
+    for (var property in properties) {
+      final mediaList = await getPropertyMedia(property.id);
+      final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+      final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                             (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
+      
+      propertiesWithMedia.add(property.copyWith(
+        media: mediaList,
+        primaryImageUrl: primaryImageUrl,
+      ));
+    }
+    
+    return propertiesWithMedia;
+  } catch (e) {
+    debugPrint('Error getting recommended properties: $e');
+    return [];
+  }
+}
+
+// ============ NEARBY PROPERTIES (GPS-based) ============
+
+Future<List<Property>> getNearbyProperties({
+  required double latitude,
+  required double longitude,
+  double radiusKm = 5.0,
+  int limit = 20,
+}) async {
+  try {
+    // Use the nearby_properties function we created
+    final response = await client.rpc(
+      'nearby_properties',
+      params: {
+        'lat': latitude,
+        'lng': longitude,
+        'radius_km': radiusKm,
+        'result_limit': limit,
+      },
+    );
+    
+    final properties = (response as List).map((data) => Property.fromJson(data)).toList();
+    
+    // Load media
+    final propertiesWithMedia = <Property>[];
+    for (var property in properties) {
+      final mediaList = await getPropertyMedia(property.id);
+      final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+      final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                             (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
+      
+      propertiesWithMedia.add(property.copyWith(
+        media: mediaList,
+        primaryImageUrl: primaryImageUrl,
+      ));
+    }
+    
+    return propertiesWithMedia;
+  } catch (e) {
+    debugPrint('Error getting nearby properties: $e');
+    return [];
+  }
+}
+
+// ============ RECENTLY ADDED PROPERTIES ============
+
+Future<List<Property>> getRecentlyAddedProperties({int limit = 10}) async {
+  try {
+    final response = await client
+        .from('properties')
+        .select()
+        .eq('is_approved', true)
+        .eq('status', 'active')
+        .gte('created_at', DateTime.now().subtract(const Duration(days: 7)).toIso8601String())
+        .order('created_at', ascending: false)
+        .limit(limit);
+    
+    final properties = (response as List).map((data) => Property.fromJson(data)).toList();
+    
+    // Load media
+    final propertiesWithMedia = <Property>[];
+    for (var property in properties) {
+      final mediaList = await getPropertyMedia(property.id);
+      final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+      final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                             (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
+      
+      propertiesWithMedia.add(property.copyWith(
+        media: mediaList,
+        primaryImageUrl: primaryImageUrl,
+      ));
+    }
+    
+    return propertiesWithMedia;
+  } catch (e) {
+    debugPrint('Error getting recently added properties: $e');
+    return [];
+  }
+}
+
+// ============ HELPER: Get property with loaded media ============
+// This helper method can be useful throughout your app
+
+Future<Property?> getPropertyWithMedia(String propertyId) async {
+  try {
+    final response = await client
+        .from('properties')
+        .select()
+        .eq('id', int.parse(propertyId))
+        .single();
+    
+    final property = Property.fromJson(response);
+    
+    // Load media
+    final mediaList = await getPropertyMedia(property.id);
+    final primaryMedia = mediaList.where((m) => m.isPrimary).firstOrNull;
+    final primaryImageUrl = primaryMedia?.fileUrl ?? 
+                           (mediaList.isNotEmpty ? mediaList.first.fileUrl : null);
+    
+    return property.copyWith(
+      media: mediaList,
+      primaryImageUrl: primaryImageUrl,
+    );
+  } catch (e) {
+    debugPrint('Error getting property with media: $e');
+    return null;
+  }
+}
+
   // ============ HELPER METHODS ============
   
   Future<bool> hasCompletedRoleRegistration(String userId, String userType) async {
