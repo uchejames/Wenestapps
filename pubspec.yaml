@@ -27,6 +27,8 @@ dependencies:
   url_launcher: ^6.2.2
   timeago: ^3.7.0
   smooth_page_indicator: ^1.1.0
+  video_player: ^2.8.1
+  chewie: ^1.7.4 
 
 dev_dependencies:
   flutter_test:

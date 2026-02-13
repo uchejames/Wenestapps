@@ -4,17 +4,20 @@ import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/services/messaging_service.dart';
 import 'package:wenest/models/message.dart';
 import 'package:wenest/models/profile.dart';
+import 'package:wenest/models/property.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class ChatScreen extends StatefulWidget {
   final String conversationId;
   final Profile otherUser;
+  final Property? propertyContext; // Optional property reference
 
   const ChatScreen({
     super.key,
     required this.conversationId,
     required this.otherUser,
+    this.propertyContext,
   });
 
   @override
@@ -28,6 +31,7 @@ class _ChatScreenState extends State<ChatScreen> {
   final _scrollController = ScrollController();
   
   List<Message> _messages = [];
+  List<String> _optimisticMessageIds = []; // Track optimistic messages
   bool _isLoading = true;
   bool _isSending = false;
   String _error = '';
@@ -82,7 +86,17 @@ class _ChatScreenState extends State<ChatScreen> {
       conversationId: widget.conversationId,
       onNewMessage: (message) {
         setState(() {
-          _messages.add(message);
+          // Remove optimistic message if it exists
+          if (_optimisticMessageIds.contains(message.id)) {
+            _optimisticMessageIds.remove(message.id);
+            // Replace optimistic with real message
+            final index = _messages.indexWhere((m) => m.id == message.id);
+            if (index != -1) {
+              _messages[index] = message;
+            }
+          } else {
+            _messages.add(message);
+          }
         });
         _scrollToBottom();
         
@@ -104,23 +118,52 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _sendMessage() async {
+  Future<void> _sendMessage({String? propertyId}) async {
     final content = _messageController.text.trim();
     if (content.isEmpty || _isSending) return;
 
     setState(() => _isSending = true);
+    final messageText = _messageController.text;
     _messageController.clear();
+
+    // Create optimistic message ID
+    final optimisticId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
+    
+    // Create optimistic message and add to list immediately
+    final optimisticMessage = Message(
+      id: optimisticId,
+      conversationId: widget.conversationId,
+      senderId: _currentUserId!,
+      receiverId: widget.otherUser.id,
+      content: messageText,
+      propertyId: propertyId ?? widget.propertyContext?.id,
+      isRead: false,
+      sentAt: DateTime.now(),  // FIXED: Changed from createdAt to sentAt
+      updatedAt: DateTime.now(),
+    );
+
+    setState(() {
+      _messages.add(optimisticMessage);
+      _optimisticMessageIds.add(optimisticId);
+    });
+    _scrollToBottom();
 
     try {
       await _messagingService.sendMessage(
         conversationId: widget.conversationId,
         receiverId: widget.otherUser.id,
-        content: content,
+        content: messageText,
+        propertyId: propertyId ?? widget.propertyContext?.id,
       );
       
-      // Message will be added via realtime subscription
-      _scrollToBottom();
+      // The real message will replace the optimistic one via realtime subscription
     } catch (e) {
+      // Remove optimistic message on error
+      setState(() {
+        _messages.removeWhere((m) => m.id == optimisticId);
+        _optimisticMessageIds.remove(optimisticId);
+      });
+      
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -128,7 +171,7 @@ class _ChatScreenState extends State<ChatScreen> {
             backgroundColor: Colors.red,
           ),
         );
-        _messageController.text = content; // Restore message
+        _messageController.text = messageText; // Restore message
       }
     } finally {
       if (mounted) {
@@ -221,6 +264,10 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          // Property Context Card (if available)
+          if (widget.propertyContext != null)
+            _buildPropertyContextCard(widget.propertyContext!),
+
           // Messages List
           Expanded(
             child: _isLoading
@@ -237,12 +284,18 @@ class _ChatScreenState extends State<ChatScreen> {
                               final message = _messages[index];
                               final isMe = message.senderId == _currentUserId;
                               final showDateHeader = _shouldShowDateHeader(index);
+                              final isOptimistic = _optimisticMessageIds.contains(message.id);
 
                               return Column(
                                 children: [
                                   if (showDateHeader)
                                     _buildDateHeader(_messages[index].createdAt),
-                                  _buildMessageBubble(message, isMe),
+                                  
+                                  // Property reference in message
+                                  if (message.propertyId != null && message.propertyId!.isNotEmpty)
+                                    _buildPropertyReferenceCard(message.propertyId!, isMe),
+                                  
+                                  _buildMessageBubble(message, isMe, isOptimistic),
                                 ],
                               );
                             },
@@ -250,77 +303,242 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
 
           // Message Input
+          _buildMessageInput(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPropertyContextCard(Property property) {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.primaryColor.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppColors.primaryColor.withValues(alpha: 0.2),
+          width: 1.5,
+        ),
+      ),
+      child: Row(
+        children: [
           Container(
-            padding: const EdgeInsets.all(16),
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
-              color: Colors.white,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 10,
-                  offset: const Offset(0, -5),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey.shade200,
+            ),
+            child: const Icon(Icons.home_rounded, color: AppColors.primaryColor, size: 30),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Inquiring about:',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  property.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textColor,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  property.formattedPrice,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.primaryColor,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
-            child: SafeArea(
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: TextField(
-                        controller: _messageController,
-                        decoration: InputDecoration(
-                          hintText: 'Type a message...',
-                          hintStyle: TextStyle(color: Colors.grey.shade500),
-                          border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        maxLines: null,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: (_) => _sendMessage(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryColor,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primaryColor.withValues(alpha: 0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: IconButton(
-                      icon: _isSending
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.send_rounded, color: Colors.white, size: 22),
-                      onPressed: _isSending ? null : _sendMessage,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.open_in_new_rounded, size: 20),
+            color: AppColors.primaryColor,
+            onPressed: () {
+              Navigator.pushNamed(
+                context,
+                '/property_detail',
+                arguments: property.id,
+              );
+            },
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildPropertyReferenceCard(String propertyId, bool isMe) {
+    return FutureBuilder<Property?>(
+      future: _supabaseService.getPropertyById(propertyId),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Container(
+            margin: EdgeInsets.only(
+              left: isMe ? 60 : 48,
+              right: isMe ? 48 : 60,
+              bottom: 8,
+            ),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade100,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Row(
+              children: [
+                SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Text('Loading property...', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          );
+        }
+
+        if (snapshot.data == null) return const SizedBox.shrink();
+
+        final property = snapshot.data!;
+        
+        return GestureDetector(
+          onTap: () {
+            Navigator.pushNamed(
+              context,
+              '/property_detail',
+              arguments: property.id,
+            );
+          },
+          child: Container(
+            margin: EdgeInsets.only(
+              left: isMe ? 60 : 48,
+              right: isMe ? 48 : 60,
+              bottom: 8,
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primaryColor.withValues(alpha: 0.3),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  height: 120,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade200,
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                  ),
+                  child: Stack(
+                    children: [
+                      const Center(
+                        child: Icon(Icons.home_rounded, size: 40, color: Colors.grey),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.open_in_new_rounded, size: 12, color: Colors.white),
+                              SizedBox(width: 4),
+                              Text(
+                                'View',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        property.title,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textColor,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        property.formattedPrice,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryColor,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.location_on_rounded, size: 12, color: Colors.grey.shade600),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              property.locationDisplay,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -335,6 +553,7 @@ class _ChatScreenState extends State<ChatScreen> {
       currentMessage.createdAt.month,
       currentMessage.createdAt.day,
     );
+    
     final previousDate = DateTime(
       previousMessage.createdAt.year,
       previousMessage.createdAt.month,
@@ -347,39 +566,109 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildDateHeader(DateTime date) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final yesterday = today.subtract(const Duration(days: 1));
     final messageDate = DateTime(date.year, date.month, date.day);
-
+    
     String dateText;
     if (messageDate.isAtSameMomentAs(today)) {
       dateText = 'Today';
-    } else if (messageDate.isAtSameMomentAs(yesterday)) {
+    } else if (messageDate.isAtSameMomentAs(today.subtract(const Duration(days: 1)))) {
       dateText = 'Yesterday';
     } else {
       dateText = '${date.day}/${date.month}/${date.year}';
     }
-
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade200,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          dateText,
-          style: TextStyle(
-            color: Colors.grey.shade700,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            dateText,
+            style: TextStyle(
+              color: Colors.grey.shade700,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ),
     );
   }
 
-  Widget _buildMessageBubble(Message message, bool isMe) {
+  Widget _buildMessageInput() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        child: Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.grey.shade200),
+                ),
+                child: TextField(
+                  controller: _messageController,
+                  decoration: InputDecoration(
+                    hintText: 'Type a message...',
+                    hintStyle: TextStyle(color: Colors.grey.shade500, fontSize: 15),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                  maxLines: null,
+                  textCapitalization: TextCapitalization.sentences,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Material(
+              color: AppColors.primaryColor,
+              borderRadius: BorderRadius.circular(24),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(24),
+                onTap: _isSending ? null : _sendMessage,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  child: _isSending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.send_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMessageBubble(Message message, bool isMe, bool isOptimistic) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
@@ -411,60 +700,77 @@ class _ChatScreenState extends State<ChatScreen> {
             const SizedBox(width: 8),
           ],
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: isMe ? AppColors.primaryColor : Colors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(16),
-                  topRight: const Radius.circular(16),
-                  bottomLeft: Radius.circular(isMe ? 16 : 4),
-                  bottomRight: Radius.circular(isMe ? 4 : 16),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 5,
-                    offset: const Offset(0, 2),
+            child: Opacity(
+              opacity: isOptimistic ? 0.6 : 1.0,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isMe ? AppColors.primaryColor : Colors.white,
+                  borderRadius: BorderRadius.only(
+                    topLeft: const Radius.circular(16),
+                    topRight: const Radius.circular(16),
+                    bottomLeft: Radius.circular(isMe ? 16 : 4),
+                    bottomRight: Radius.circular(isMe ? 4 : 16),
                   ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message.content,
-                    style: TextStyle(
-                      color: isMe ? Colors.white : AppColors.textColor,
-                      fontSize: 15,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 5,
+                      offset: const Offset(0, 2),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        timeago.format(message.createdAt),
-                        style: TextStyle(
-                          color: isMe
-                              ? Colors.white.withValues(alpha: 0.7)
-                              : Colors.grey.shade500,
-                          fontSize: 11,
-                        ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      message.content,
+                      style: TextStyle(
+                        color: isMe ? Colors.white : AppColors.textColor,
+                        fontSize: 15,
                       ),
-                      if (isMe) ...[
-                        const SizedBox(width: 4),
-                        Icon(
-                          message.isRead
-                              ? Icons.done_all_rounded
-                              : Icons.done_rounded,
-                          color: Colors.white.withValues(alpha: 0.7),
-                          size: 14,
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isOptimistic)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 4),
+                            child: SizedBox(
+                              width: 10,
+                              height: 10,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  isMe ? Colors.white.withValues(alpha: 0.7) : Colors.grey.shade500,
+                                ),
+                              ),
+                            ),
+                          ),
+                        Text(
+                          timeago.format(message.createdAt),
+                          style: TextStyle(
+                            color: isMe
+                                ? Colors.white.withValues(alpha: 0.7)
+                                : Colors.grey.shade500,
+                            fontSize: 11,
+                          ),
                         ),
+                        if (isMe && !isOptimistic) ...[
+                          const SizedBox(width: 4),
+                          Icon(
+                            message.isRead
+                                ? Icons.done_all_rounded
+                                : Icons.done_rounded,
+                            color: Colors.white.withValues(alpha: 0.7),
+                            size: 14,
+                          ),
+                        ],
                       ],
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

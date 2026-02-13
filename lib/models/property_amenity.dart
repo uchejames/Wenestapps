@@ -1,8 +1,8 @@
 // ============= property_amenity.dart =============
 class PropertyAmenity {
-  final String id;
-  final String propertyId;
-  final String amenityId;
+  final int id; // Changed from String to int
+  final int propertyId; // Changed from String to int
+  final int amenityId; // Changed from String to int
   final DateTime createdAt;
 
   PropertyAmenity({
@@ -14,9 +14,9 @@ class PropertyAmenity {
 
   factory PropertyAmenity.fromJson(Map<String, dynamic> json) {
     return PropertyAmenity(
-      id: json['id'] as String,
-      propertyId: json['property_id'] as String,
-      amenityId: json['amenity_id'] as String,
+      id: json['id'] as int,
+      propertyId: json['property_id'] as int,
+      amenityId: json['amenity_id'] as int,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }

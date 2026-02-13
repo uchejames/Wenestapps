@@ -3,10 +3,14 @@ import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/property.dart';
 import 'package:wenest/models/property_media.dart';
+import 'package:wenest/models/amenity.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:wenest/services/messaging_service.dart';
+import 'package:video_player/video_player.dart';
+import 'package:wenest/screens/shared/video_player_screen.dart';
+import 'package:chewie/chewie.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -22,6 +26,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
   final _supabaseService = SupabaseService();
   Property? _property;
   List<PropertyMedia> _propertyMedia = [];
+  List<Amenity> _propertyAmenities = []; // Added to store fetched amenities
   bool _isLoading = true;
   bool _isSaved = false;
   int _currentImageIndex = 0;
@@ -80,10 +85,12 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
     try {
       final property = await _supabaseService.getPropertyById(propertyId);
       final media = await _supabaseService.getPropertyMedia(propertyId);
+      final amenities = await _supabaseService.getPropertyAmenities(propertyId);
 
       setState(() {
         _property = property;
         _propertyMedia = media;
+        _propertyAmenities = amenities;
         _isLoading = false;
       });
 
@@ -103,6 +110,185 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
       }
     }
   }
+
+  Widget _buildMiniPhotoGallery() {
+  if (_displayImages.length <= 1) return const SizedBox.shrink();
+  
+  return Container(
+    margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'Gallery',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textColor,
+              ),
+            ),
+            TextButton.icon(
+              onPressed: () => _showFullGallery(),
+              icon: const Icon(Icons.fullscreen_rounded, size: 18),
+              label: const Text(
+                'View All',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 80,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _displayImages.length > 6 ? 6 : _displayImages.length,
+            itemBuilder: (context, index) {
+              final isLast = index == 5 && _displayImages.length > 6;
+              return GestureDetector(
+                onTap: () {
+                  if (isLast) {
+                    _showFullGallery();
+                  } else {
+                    setState(() => _currentImageIndex = index);
+                    // Scroll carousel to this image
+                  }
+                },
+                child: Container(
+                  width: 80,
+                  margin: EdgeInsets.only(
+                    right: index < 5 ? 8 : 0,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentImageIndex == index
+                          ? AppColors.primaryColor
+                          : Colors.transparent,
+                      width: 2.5,
+                    ),
+                  ),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(10),
+                        child: Image.network(
+                          _displayImages[index],
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image_rounded, color: Colors.grey),
+                            );
+                          },
+                        ),
+                      ),
+                      if (isLast)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: AppColors.darkTeal.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.photo_library_rounded,
+                                  color: Colors.white,
+                                  size: 24,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '+${_displayImages.length - 5}',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+void _showFullGallery() {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          leading: IconButton(
+            icon: const Icon(Icons.close_rounded, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text(
+            'Gallery (${_displayImages.length} Photos)',
+            style: const TextStyle(color: Colors.white),
+          ),
+        ),
+        body: GridView.builder(
+          padding: const EdgeInsets.all(8),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8,
+            mainAxisSpacing: 8,
+          ),
+          itemCount: _displayImages.length,
+          itemBuilder: (context, index) {
+            return GestureDetector(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => Scaffold(
+                      backgroundColor: Colors.black,
+                      appBar: AppBar(
+                        backgroundColor: Colors.black,
+                        leading: IconButton(
+                          icon: const Icon(Icons.close_rounded, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ),
+                      body: Center(
+                        child: InteractiveViewer(
+                          child: Image.network(_displayImages[index]),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  _displayImages[index],
+                  fit: BoxFit.cover,
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
 
   Future<void> _toggleSave() async {
     if (_property == null) return;
@@ -126,7 +312,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
             ],
           ),
           backgroundColor:
-              _isSaved ? Colors.green.shade700 : Colors.grey.shade700,
+              _isSaved ? AppColors.secondaryColor : Colors.grey.shade700,
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
           shape:
@@ -187,7 +373,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: const Color(0xFFF8F9FA),
       body: _isLoading
           ? _buildShimmerLoading()
           : _property == null
@@ -221,6 +407,9 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
                 // Price & Title Card
                 _buildPriceTitleCard(),
 
+                // Mini Photo Gallery (NEW - add this right after title)
+                _buildMiniPhotoGallery(),
+
                 // Property Stats
                 if (_hasPropertyStats()) ...[
                   const SizedBox(height: 16),
@@ -234,14 +423,14 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
 
                 const SizedBox(height: 16),
 
+                // Video Section (MOVED - right after property details)
+                if (_videoMedia.isNotEmpty) ...[
+                  _buildVideoSection(),
+                  const SizedBox(height: 16),
+                ],
+
                 // Description
                 _buildDescriptionCard(),
-
-                // Video Section
-                if (_videoMedia.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  _buildVideoSection(),
-                ],
 
                 // Property Owner Card (only show to non-owners)
                 if (!_isPropertyOwner) ...[
@@ -290,7 +479,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
                 ? Icons.favorite_rounded
                 : Icons.favorite_border_rounded,
             onPressed: _toggleSave,
-            color: _isSaved ? Colors.red : null,
+            color: _isSaved ? AppColors.secondaryColor : AppColors.primaryColor,
           ),
         const SizedBox(width: 8),
         _buildCircularIconButton(
@@ -381,7 +570,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.6),
+        color: AppColors.darkTeal.withValues(alpha: 0.7),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
@@ -641,7 +830,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
         Container(
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
-            color: AppColors.primaryColor.withValues(alpha: 0.08),
+            color: AppColors.primaryColor.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Icon(icon, color: AppColors.primaryColor, size: 28),
@@ -735,67 +924,165 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
     );
   }
 
-  Widget _buildVideoSection() {
-    return _buildCard(
-      title: 'Property Video Tour',
-      child: GestureDetector(
-        onTap: () async {
-          final url = Uri.parse(_videoMedia.first.fileUrl);
-          if (await canLaunchUrl(url)) {
-            await launchUrl(url, mode: LaunchMode.externalApplication);
-          }
-        },
-        child: Container(
-          height: 220,
-          decoration: BoxDecoration(
-            color: Colors.black,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Stack(
-            alignment: Alignment.center,
+Widget _buildVideoSection() {
+  return Container(
+    margin: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 20,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(20),
+          child: Row(
             children: [
               Container(
-                color: Colors.grey.shade900,
-                child: Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.videocam_rounded,
-                        size: 64,
-                        color: Colors.white.withValues(alpha: 0.7),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Property Video Tour',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.7),
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.all(20),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryColor.withValues(alpha: 0.9),
-                  shape: BoxShape.circle,
+                  color: AppColors.primaryColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(
-                  Icons.play_arrow_rounded,
-                  size: 48,
-                  color: Colors.white,
+                  Icons.play_circle_filled_rounded,
+                  color: AppColors.primaryColor,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Text(
+                'Property Video Tour',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textColor,
                 ),
               ),
             ],
           ),
         ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.only(bottom: 20),
+          itemCount: _videoMedia.length,
+          itemBuilder: (context, index) {
+            final video = _videoMedia[index];
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: _buildVideoThumbnail(video),
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildVideoThumbnail(PropertyMedia video) {
+  return GestureDetector(
+    onTap: () => _playVideo(video.fileUrl),
+    child: Container(
+      height: 200,
+      decoration: BoxDecoration(
+        color: Colors.grey.shade900,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
-    );
-  }
+      child: Stack(
+        children: [
+          // Thumbnail or placeholder
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              color: Colors.grey.shade900,
+              child: Center(
+                child: Icon(
+                  Icons.videocam_rounded,
+                  size: 60,
+                  color: Colors.white.withValues(alpha: 0.3),
+                ),
+              ),
+            ),
+          ),
+          
+          // Play button overlay
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryColor.withValues(alpha: 0.4),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 40,
+              ),
+            ),
+          ),
+          
+          // Duration badge (if available)
+          Positioned(
+            bottom: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.7),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.play_circle_outline_rounded, color: Colors.white, size: 14),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Play Video',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+void _playVideo(String videoUrl) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (context) => VideoPlayerScreen(videoUrl: videoUrl),
+    ),
+  );
+}
 
   Widget _buildPropertyOwnerCard() {
     return FutureBuilder<Map<String, dynamic>>(
@@ -997,7 +1284,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            AppColors.primaryColor.withValues(alpha: 0.08),
+            AppColors.primaryColor.withValues(alpha: 0.1),
             AppColors.primaryColor.withValues(alpha: 0.04),
           ],
           begin: Alignment.topLeft,
@@ -1096,79 +1383,200 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
   }
 
   Widget _buildAmenitiesCard() {
-    final amenities = <Map<String, dynamic>>[];
+    // Combine property features with actual amenities
+    final basicFeatures = <Map<String, dynamic>>[];
 
     if (_property!.bedrooms != null && _property!.bedrooms! > 0) {
-      amenities.add({
+      basicFeatures.add({
         'icon': Icons.bed_rounded,
         'label': '${_property!.bedrooms} Bedrooms'
       });
     }
     if (_property!.bathrooms != null && _property!.bathrooms! > 0) {
-      amenities.add({
+      basicFeatures.add({
         'icon': Icons.bathtub_rounded,
         'label': '${_property!.bathrooms} Bathrooms'
       });
     }
     if (_property!.toilets != null && _property!.toilets! > 0) {
-      amenities.add({
+      basicFeatures.add({
         'icon': Icons.wc_rounded,
         'label': '${_property!.toilets} Toilets'
       });
     }
     if (_property!.parkingSpaces > 0) {
-      amenities.add({
+      basicFeatures.add({
         'icon': Icons.local_parking_rounded,
         'label': '${_property!.parkingSpaces} Parking'
       });
     }
     if (_property!.furnishingStatus != null) {
-      amenities.add({
+      basicFeatures.add({
         'icon': Icons.weekend_rounded,
         'label': _formatText(_property!.furnishingStatus!)
       });
     }
 
-    if (amenities.isEmpty) return const SizedBox.shrink();
+    // If no features and no amenities, don't show the card
+    if (basicFeatures.isEmpty && _propertyAmenities.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return _buildCard(
       title: 'Amenities & Features',
-      child: Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        children: amenities.map((amenity) {
-          return Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppColors.primaryColor.withValues(alpha: 0.2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Display basic features
+          if (basicFeatures.isNotEmpty) ...[
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: basicFeatures.map((feature) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryColor.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: AppColors.primaryColor.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        feature['icon'] as IconData,
+                        color: AppColors.primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        feature['label'] as String,
+                        style: TextStyle(
+                          color: Colors.grey.shade800,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          
+          // Display fetched amenities
+          if (_propertyAmenities.isNotEmpty) ...[
+            if (basicFeatures.isNotEmpty) const SizedBox(height: 20),
+            const Divider(height: 32),
+            Text(
+              'Additional Amenities',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey.shade800,
               ),
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  amenity['icon'] as IconData,
-                  color: AppColors.primaryColor,
-                  size: 20,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  amenity['label'] as String,
-                  style: TextStyle(
-                    color: Colors.grey.shade800,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: _propertyAmenities.map((amenity) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.grey.shade300,
+                    ),
                   ),
-                ),
-              ],
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _getAmenityIcon(amenity.name, amenity.icon),
+                        color: AppColors.primaryColor,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        amenity.name,
+                        style: TextStyle(
+                          color: Colors.grey.shade800,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
-          );
-        }).toList(),
+          ],
+        ],
       ),
     );
+  }
+
+  // Helper method to get appropriate icon for amenity
+  IconData _getAmenityIcon(String name, String? iconName) {
+    // If icon is provided, try to match it
+    if (iconName != null && iconName.isNotEmpty) {
+      switch (iconName.toLowerCase()) {
+        case 'wifi':
+          return Icons.wifi;
+        case 'security':
+          return Icons.security;
+        case 'pool':
+          return Icons.pool;
+        case 'gym':
+          return Icons.fitness_center;
+        case 'garden':
+          return Icons.yard;
+        case 'cctv':
+          return Icons.videocam;
+        case 'ac':
+          return Icons.ac_unit;
+        case 'generator':
+          return Icons.power;
+        case 'water':
+          return Icons.water_drop;
+        case 'elevator':
+          return Icons.elevator;
+        case 'balcony':
+          return Icons.balcony;
+        case 'parking':
+          return Icons.local_parking;
+      }
+    }
+
+    // Fallback based on name
+    final nameLower = name.toLowerCase();
+    if (nameLower.contains('wifi')) return Icons.wifi;
+    if (nameLower.contains('security')) return Icons.security;
+    if (nameLower.contains('pool')) return Icons.pool;
+    if (nameLower.contains('gym')) return Icons.fitness_center;
+    if (nameLower.contains('garden')) return Icons.yard;
+    if (nameLower.contains('cctv')) return Icons.videocam;
+    if (nameLower.contains('air') || nameLower.contains('conditioning')) return Icons.ac_unit;
+    if (nameLower.contains('generator') || nameLower.contains('power')) return Icons.power;
+    if (nameLower.contains('water')) return Icons.water_drop;
+    if (nameLower.contains('elevator') || nameLower.contains('lift')) return Icons.elevator;
+    if (nameLower.contains('balcony')) return Icons.balcony;
+    if (nameLower.contains('parking')) return Icons.local_parking;
+    if (nameLower.contains('furnished')) return Icons.chair;
+    if (nameLower.contains('solar')) return Icons.solar_power;
+    if (nameLower.contains('gate')) return Icons.sensor_door;
+    if (nameLower.contains('intercom')) return Icons.phone;
+    if (nameLower.contains('study') || nameLower.contains('room')) return Icons.menu_book;
+    if (nameLower.contains('laundry')) return Icons.local_laundry_service;
+    if (nameLower.contains('backup')) return Icons.battery_charging_full;
+    if (nameLower.contains('bq') || nameLower.contains('quarters')) return Icons.house;
+
+    // Default icon
+    return Icons.check_circle_outline;
   }
 
   Widget _buildContactBar() {
@@ -1408,7 +1816,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
             child: Center(
               child: CircularProgressIndicator(
                 valueColor:
-                    const AlwaysStoppedAnimation<Color>(AppColors.primaryColor),
+                    const AlwaysStoppedAnimation<Color>(AppColors.secondaryColor),
                 value: loadingProgress.expectedTotalBytes != null
                     ? loadingProgress.cumulativeBytesLoaded /
                         loadingProgress.expectedTotalBytes!
@@ -1672,7 +2080,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
 
       final conversation = await _messagingService!.getOrCreateConversation(
         otherUserId: ownerId,
-        propertyId: _property?.id,
+        propertyId: _property?.id, // Pass property ID here
       );
 
       if (mounted) Navigator.pop(context);
@@ -1684,6 +2092,7 @@ class _PropertyDetailScreenState extends State<PropertyDetailScreen>
           arguments: {
             'conversationId': conversation.id,
             'otherUser': ownerProfile,
+            'propertyContext': _property, // NEW: Pass property context
           },
         );
       }

@@ -3,6 +3,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agency.dart';
+import 'package:wenest/services/messaging_service.dart';
 import 'package:wenest/models/property.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:smooth_page_indicator/smooth_page_indicator.dart';
@@ -124,6 +125,72 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen>
     }
   }
 
+  Future<void> _startConversationWithAgency() async {
+    if (_agency == null || _agency!.profileId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to start conversation'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+
+      // Fetch the agency's profile
+      final agencyProfile = await _supabaseService.getProfile(_agency!.profileId!);
+      if (agencyProfile == null) {
+        if (mounted) Navigator.pop(context);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Could not load agency profile'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
+
+      final messagingService = MessagingService(_supabaseService.client);
+      final conversation = await messagingService.getOrCreateConversation(
+        otherUserId: _agency!.profileId!,
+      );
+
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        Navigator.pushNamed(
+          context,
+          '/chat',
+          arguments: {
+            'conversationId': conversation.id,
+            'otherUser': agencyProfile,
+          },
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error starting conversation: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _loadAgencyProperties(String agencyId) async {
     debugPrint('Loading properties for agency: $agencyId');
 
@@ -149,20 +216,6 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen>
       setState(() {
         _isLoadingProperties = false;
       });
-    }
-  }
-
-  Future<void> _makePhoneCall(String phoneNumber) async {
-    final url = Uri.parse('tel:$phoneNumber');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
-    }
-  }
-
-  Future<void> _sendEmail(String email) async {
-    final url = Uri.parse('mailto:$email');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
     }
   }
 
@@ -645,9 +698,9 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Contact Section
+          // Message Button (replaces direct contact info)
           const Text(
-            'Contact Information',
+            'Get in Touch',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -655,22 +708,128 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen>
             ),
           ),
           const SizedBox(height: 12),
-          if (_agency!.contactPhone != null)
-            _buildModernContactCard(
-              icon: Icons.phone_outlined,
-              title: 'Phone Number',
-              value: _agency!.contactPhone!,
-              onTap: () => _makePhoneCall(_agency!.contactPhone!),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [AppColors.primaryColor, Color(0xFF0EA5E9)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.primaryColor.withValues(alpha: 0.3),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-          if (_agency!.contactEmail != null) ...[
-            const SizedBox(height: 10),
-            _buildModernContactCard(
-              icon: Icons.email_outlined,
-              title: 'Email Address',
-              value: _agency!.contactEmail!,
-              onTap: () => _sendEmail(_agency!.contactEmail!),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(
+                        Icons.chat_bubble_rounded,
+                        color: Colors.white,
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Message This Agency',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            'Get instant responses to your inquiries',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => _startConversationWithAgency(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.primaryColor,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.send_rounded, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Start Conversation',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
+
+          // Privacy Note
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.privacy_tip_outlined, 
+                  size: 18, 
+                  color: Colors.grey.shade600
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Contact details are private. Use messaging for all communications.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
 
           // Office Hours
           const SizedBox(height: 24),
@@ -894,64 +1053,6 @@ class _AgencyDetailScreenState extends State<AgencyDetailScreen>
 
           const SizedBox(height: 20),
         ],
-      ),
-    );
-  }
-
-  Widget _buildModernContactCard({
-    required IconData icon,
-    required String title,
-    required String value,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.primaryColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: AppColors.primaryColor, size: 22),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(Icons.arrow_forward_ios,
-                size: 16, color: Colors.grey.shade400),
-          ],
-        ),
       ),
     );
   }

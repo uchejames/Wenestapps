@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:wenest/utils/constants.dart';
 import 'package:wenest/services/supabase_service.dart';
 import 'package:wenest/models/agent.dart';
+import 'package:wenest/models/amenity.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 
@@ -19,6 +20,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _formKey = GlobalKey<FormState>();
   final _supabaseService = SupabaseService();
   final _imagePicker = ImagePicker();
+  final PageController _pageController = PageController();
   
   // Controllers
   final _titleController = TextEditingController();
@@ -27,24 +29,35 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _addressController = TextEditingController();
   final _cityAreaController = TextEditingController();
   final _stateController = TextEditingController();
-  final _bedroomsController = TextEditingController();
-  final _bathroomsController = TextEditingController();
-  final _toiletsController = TextEditingController();
+  final _bedroomsController = TextEditingController(text: '0');
+  final _bathroomsController = TextEditingController(text: '0');
+  final _toiletsController = TextEditingController(text: '0');
   final _squareMetersController = TextEditingController();
   final _yearBuiltController = TextEditingController();
-  final _parkingSpacesController = TextEditingController();
+  final _parkingSpacesController = TextEditingController(text: '0');
   
   String _propertyType = 'apartment';
   String _listingType = 'rent';
   String _furnishingStatus = 'unfurnished';
   bool _negotiable = false;
   bool _isLoading = false;
-  int _currentStep = 0;
+  bool _isUploadingMedia = false;
+  bool _isLoadingAmenities = true;
+  int _currentPage = 0;
 
   // Media files
   final List<XFile> _selectedImages = [];
   XFile? _selectedVideo;
-  bool _isUploadingMedia = false;
+
+  // Amenities
+  List<Amenity> _availableAmenities = [];
+  final Set<int> _selectedAmenityIds = {}; // Changed from String to int
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAmenities();
+  }
 
   @override
   void dispose() {
@@ -60,7 +73,42 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     _squareMetersController.dispose();
     _yearBuiltController.dispose();
     _parkingSpacesController.dispose();
+    _pageController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAmenities() async {
+    try {
+      print('DEBUG: Starting to load amenities...');
+      setState(() => _isLoadingAmenities = true);
+      
+      final amenities = await _supabaseService.getAllAmenities();
+      
+      print('DEBUG: Received ${amenities.length} amenities');
+      if (amenities.isNotEmpty) {
+        print('DEBUG: First amenity - ID: ${amenities.first.id}, Name: ${amenities.first.name}, Category: ${amenities.first.category}');
+      }
+      
+      setState(() {
+        _availableAmenities = amenities;
+        _isLoadingAmenities = false;
+      });
+      
+      print('DEBUG: Amenities loaded successfully. Count: ${_availableAmenities.length}');
+    } catch (e, stackTrace) {
+      print('DEBUG ERROR: Failed to load amenities: $e');
+      print('DEBUG STACKTRACE: $stackTrace');
+      
+      setState(() => _isLoadingAmenities = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading amenities: $e'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _pickImages() async {
@@ -70,12 +118,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       );
       
       setState(() {
-        if (_selectedImages.length + images.length <= 10) {
+        final remainingSlots = 10 - _selectedImages.length;
+        if (images.length <= remainingSlots) {
           _selectedImages.addAll(images);
         } else {
+          _selectedImages.addAll(images.take(remainingSlots));
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Maximum 10 images allowed'),
+            SnackBar(
+              content: Text('Maximum 10 images allowed. Added ${remainingSlots} images.'),
               backgroundColor: Colors.orange,
             ),
           );
@@ -110,9 +160,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
           }
           return;
         }
-        setState(() {
-          _selectedVideo = video;
-        });
+        setState(() => _selectedVideo = video);
       }
     } catch (e) {
       if (mounted) {
@@ -123,69 +171,104 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     }
   }
 
-  Future<void> _removeImage(int index) async {
-    setState(() {
-      _selectedImages.removeAt(index);
-    });
+  void _removeImage(int index) {
+    setState(() => _selectedImages.removeAt(index));
   }
 
-  Future<void> _removeVideo() async {
-    setState(() {
-      _selectedVideo = null;
-    });
+  void _removeVideo() {
+    setState(() => _selectedVideo = null);
   }
 
-  Future<void> _submitProperty({bool publish = false}) async {
-    // Validate current step first
-    if (_currentStep == 0) {
-      if (_titleController.text.trim().isEmpty ||
-          _descriptionController.text.trim().isEmpty ||
-          _priceController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please fill all required fields in Basic Information'),
-            backgroundColor: Colors.orange,
-          ),
+  bool _validateCurrentPage() {
+    switch (_currentPage) {
+      case 0: // Basic Information
+        if (_titleController.text.trim().isEmpty) {
+          _showError('Please enter a property title');
+          return false;
+        }
+        if (_descriptionController.text.trim().isEmpty) {
+          _showError('Please enter a property description');
+          return false;
+        }
+        if (_priceController.text.trim().isEmpty) {
+          _showError('Please enter a price');
+          return false;
+        }
+        final price = double.tryParse(_priceController.text.trim());
+        if (price == null || price <= 0) {
+          _showError('Please enter a valid price');
+          return false;
+        }
+        return true;
+
+      case 1: // Property Details
+        if (_addressController.text.trim().isEmpty) {
+          _showError('Please enter the property address');
+          return false;
+        }
+        if (_cityAreaController.text.trim().isEmpty) {
+          _showError('Please enter the city/area');
+          return false;
+        }
+        if (_stateController.text.trim().isEmpty) {
+          _showError('Please enter the state');
+          return false;
+        }
+        return true;
+
+      case 2: // Photos & Video
+        if (_selectedImages.isEmpty) {
+          _showError('Please add at least one property image');
+          return false;
+        }
+        return true;
+
+      case 3: // Amenities - optional, always valid
+        return true;
+
+      default:
+        return true;
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orange,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  void _nextPage() {
+    if (_validateCurrentPage()) {
+      if (_currentPage < 4) {
+        _pageController.nextPage(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
         );
-        return;
       }
     }
+  }
 
-    if (_currentStep == 1) {
-      if (_addressController.text.trim().isEmpty ||
-          _cityAreaController.text.trim().isEmpty ||
-          _stateController.text.trim().isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please fill all required fields in Property Details'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
+  void _previousPage() {
+    if (_currentPage > 0) {
+      _pageController.previousPage(
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
     }
+  }
 
-    if (_currentStep == 2) {
-      if (_selectedImages.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Please add at least one image'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-    }
-
-    // Only proceed with submission on final step
-    if (_currentStep < 3) {
-      setState(() => _currentStep++);
-      return;
-    }
+  Future<void> _submitProperty() async {
+    if (!_validateCurrentPage()) return;
 
     setState(() => _isLoading = true);
 
     try {
+      // Create property
       final propertyId = await _supabaseService.createProperty(
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
@@ -197,17 +280,19 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         state: _stateController.text.trim(),
         agentId: widget.agent.id,
         agencyId: widget.agent.agencyId,
-        bedrooms: _bedroomsController.text.isEmpty ? null : int.parse(_bedroomsController.text),
-        bathrooms: _bathroomsController.text.isEmpty ? null : int.parse(_bathroomsController.text),
-        toilets: _toiletsController.text.isEmpty ? null : int.parse(_toiletsController.text),
-        squareMeters: _squareMetersController.text.isEmpty ? null : double.parse(_squareMetersController.text),
-        yearBuilt: _yearBuiltController.text.isEmpty ? null : int.parse(_yearBuiltController.text),
+        bedrooms: int.tryParse(_bedroomsController.text) ?? 0,
+        bathrooms: int.tryParse(_bathroomsController.text) ?? 0,
+        toilets: int.tryParse(_toiletsController.text) ?? 0,
+        squareMeters: double.tryParse(_squareMetersController.text),
+        yearBuilt: int.tryParse(_yearBuiltController.text),
         furnishingStatus: _furnishingStatus,
-        parkingSpaces: _parkingSpacesController.text.isEmpty ? 0 : int.parse(_parkingSpacesController.text),
+        parkingSpaces: int.tryParse(_parkingSpacesController.text) ?? 0,
         negotiable: _negotiable,
       );
 
+      // Upload media
       setState(() => _isUploadingMedia = true);
+      
       for (int i = 0; i < _selectedImages.length; i++) {
         await _supabaseService.uploadPropertyMedia(
           propertyId: propertyId,
@@ -226,31 +311,56 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         );
       }
 
-      if (publish) {
-        await _supabaseService.publishProperty(propertyId);
+      // Add amenities
+      if (_selectedAmenityIds.isNotEmpty) {
+        for (int amenityId in _selectedAmenityIds) {
+          await _supabaseService.addPropertyAmenity(
+            propertyId: propertyId,
+            amenityId: amenityId.toString(), // Convert to String for service method
+          );
+        }
       }
+
+      setState(() {
+        _isLoading = false;
+        _isUploadingMedia = false;
+      });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(publish ? 'Property published successfully!' : 'Property saved as draft!'),
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Property created successfully!'),
+              ],
+            ),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
-        Navigator.pop(context, true);
+
+        // Navigate back after a short delay
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted) Navigator.pop(context, true);
+        });
       }
     } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _isUploadingMedia = false;
+      });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Error creating property: $e'),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
         );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _isUploadingMedia = false;
-        });
       }
     }
   }
@@ -258,796 +368,1170 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.backgroundColor,
       appBar: AppBar(
-        title: const Text('Add New Property'),
         backgroundColor: Colors.white,
-        foregroundColor: Colors.grey.shade900,
         elevation: 0,
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildProgressIndicator(),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Form(
-                  key: _formKey,
-                  child: _buildStepContent(),
-                ),
-              ),
-            ),
-            _buildBottomNavigation(),
-          ],
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.black87),
+          onPressed: () => Navigator.pop(context),
         ),
+        title: const Text(
+          'Add New Property',
+          style: TextStyle(
+            color: Colors.black87,
+            fontWeight: FontWeight.bold,
+            fontSize: 20,
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          _buildProgressIndicator(),
+          Expanded(
+            child: PageView(
+              controller: _pageController,
+              physics: const NeverScrollableScrollPhysics(),
+              onPageChanged: (page) => setState(() => _currentPage = page),
+              children: [
+                _buildBasicInformationPage(),
+                _buildPropertyDetailsPage(),
+                _buildPhotosVideoPage(),
+                _buildAmenitiesPage(),
+                _buildReviewPage(),
+              ],
+            ),
+          ),
+          _buildNavigationButtons(),
+        ],
       ),
     );
   }
 
   Widget _buildProgressIndicator() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200),
-        ),
-      ),
-      child: Row(
-        children: List.generate(4, (index) {
-          final isActive = index == _currentStep;
-          final isCompleted = index < _currentStep;
-          
-          return Expanded(
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: isCompleted || isActive
-                              ? AppColors.primaryColor
-                              : Colors.grey.shade200,
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(
-                          child: isCompleted
-                              ? const Icon(
-                                  Icons.check_rounded,
-                                  color: Colors.white,
-                                  size: 16,
-                                )
-                              : Text(
-                                  '${index + 1}',
-                                  style: TextStyle(
-                                    color: isActive ? Colors.white : Colors.grey.shade600,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _getStepTitle(index),
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                          color: isActive
-                              ? AppColors.primaryColor
-                              : Colors.grey.shade600,
-                        ),
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+      color: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Column(
+        children: [
+          Row(
+            children: List.generate(5, (index) {
+              final isCompleted = index < _currentPage;
+              final isCurrent = index == _currentPage;
+              return Expanded(
+                child: Container(
+                  height: 4,
+                  margin: EdgeInsets.only(right: index < 4 ? 8 : 0),
+                  decoration: BoxDecoration(
+                    color: isCompleted || isCurrent
+                        ? AppColors.primaryColor
+                        : Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                if (index < 3)
-                  Container(
-                    width: 20,
-                    height: 2,
-                    margin: const EdgeInsets.only(bottom: 18),
-                    color: index < _currentStep
-                        ? AppColors.primaryColor
-                        : Colors.grey.shade200,
-                  ),
-              ],
+              );
+            }),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _getPageTitle(),
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
             ),
-          );
-        }),
+          ),
+        ],
       ),
     );
   }
 
-  String _getStepTitle(int index) {
-    switch (index) {
+  String _getPageTitle() {
+    switch (_currentPage) {
       case 0:
-        return 'Basic';
+        return 'Step 1: Basic Information';
       case 1:
-        return 'Details';
+        return 'Step 2: Property Details';
       case 2:
-        return 'Media';
+        return 'Step 3: Photos & Video';
       case 3:
-        return 'Review';
+        return 'Step 4: Amenities';
+      case 4:
+        return 'Step 5: Review & Submit';
       default:
         return '';
     }
   }
 
-  Widget _buildStepContent() {
-    switch (_currentStep) {
-      case 0:
-        return _buildBasicInfoStep();
-      case 1:
-        return _buildPropertyDetailsStep();
-      case 2:
-        return _buildMediaStep();
-      case 3:
-        return _buildReviewStep();
-      default:
-        return const SizedBox();
-    }
-  }
-
-  Widget _buildBottomNavigation() {
+  Widget _buildNavigationButtons() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade200),
-        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
         ],
       ),
-      child: SafeArea(
-        top: false,
-        child: Row(
-          children: [
-            if (_currentStep > 0)
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _isLoading ? null : () {
-                    setState(() => _currentStep--);
-                  },
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    side: const BorderSide(color: AppColors.primaryColor),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          if (_currentPage > 0)
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _isLoading ? null : _previousPage,
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  side: BorderSide(color: Colors.grey.shade300),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Text('Back'),
+                ),
+                child: const Text(
+                  'Back',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
-            if (_currentStep > 0) const SizedBox(width: 12),
-            Expanded(
-              flex: _currentStep == 0 ? 1 : 2,
-              child: _currentStep < 3
-                  ? ElevatedButton(
-                      onPressed: _isLoading ? null : () => _submitProperty(publish: false),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          if (_currentPage > 0) const SizedBox(width: 12),
+          Expanded(
+            flex: _currentPage > 0 ? 1 : 1,
+            child: ElevatedButton(
+              onPressed: _isLoading
+                  ? null
+                  : _currentPage < 4
+                      ? _nextPage
+                      : _submitProperty,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: _isLoading || _isUploadingMedia
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2,
                       ),
-                      child: const Text('Continue'),
                     )
-                  : Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _isLoading ? null : () => _submitProperty(publish: true),
-                          icon: _isLoading
-                              ? const SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : const Icon(Icons.publish_rounded, size: 20),
-                          label: Text(_isLoading ? 'Publishing...' : 'Publish Property'),
-                          style: ElevatedButton.styleFrom(
-                            minimumSize: const Size(double.infinity, 46),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        TextButton(
-                          onPressed: _isLoading ? null : () => _submitProperty(publish: false),
-                          child: const Text('Save as Draft'),
-                        ),
-                      ],
+                  : Text(
+                      _currentPage < 4 ? 'Continue' : 'Submit Property',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildBasicInfoStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Basic Information',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 20),
-        
-        const Text('Property Title *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _titleController,
-          decoration: InputDecoration(
-            hintText: 'e.g., Modern 3 Bedroom Apartment',
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+  // PAGE 1: BASIC INFORMATION
+  Widget _buildBasicInformationPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Basic Information',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
           ),
-        ),
-        const SizedBox(height: 16),
-        
-        const Text('Description *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _descriptionController,
-          maxLines: 4,
-          decoration: InputDecoration(
-            hintText: 'Describe the property...',
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 8),
+          Text(
+            'Start by providing the essential details about your property',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
             ),
-            contentPadding: const EdgeInsets.all(14),
           ),
-        ),
-        const SizedBox(height: 16),
-        
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Property Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: _propertyType,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'apartment', child: Text('Apartment')),
-                      DropdownMenuItem(value: 'house', child: Text('House')),
-                      DropdownMenuItem(value: 'condo', child: Text('Condo')),
-                      DropdownMenuItem(value: 'land', child: Text('Land')),
-                      DropdownMenuItem(value: 'commercial', child: Text('Commercial')),
-                      DropdownMenuItem(value: 'office', child: Text('Office')),
-                      DropdownMenuItem(value: 'warehouse', child: Text('Warehouse')),
-                    ],
-                    onChanged: (value) => setState(() => _propertyType = value!),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Listing Type *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    initialValue: _listingType,
-                    decoration: InputDecoration(
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 'rent', child: Text('For Rent')),
-                      DropdownMenuItem(value: 'sale', child: Text('For Sale')),
-                      DropdownMenuItem(value: 'shortlet', child: Text('Shortlet')),
-                    ],
-                    onChanged: (value) => setState(() => _listingType = value!),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        
-        const Text('Price (₦) *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _priceController,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: InputDecoration(
-            hintText: 'Enter amount',
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          ),
-        ),
-        const SizedBox(height: 10),
-        
-        CheckboxListTile(
-          value: _negotiable,
-          onChanged: (value) => setState(() => _negotiable = value!),
-          title: const Text('Price is negotiable', style: TextStyle(fontSize: 14)),
-          contentPadding: EdgeInsets.zero,
-          controlAffinity: ListTileControlAffinity.leading,
-        ),
-      ],
-    );
-  }
+          const SizedBox(height: 24),
 
-  Widget _buildPropertyDetailsStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Property Details',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 20),
-        
-        const Text('Address *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: _addressController,
-          decoration: InputDecoration(
-            hintText: 'e.g., 123 Main Street',
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-          ),
-        ),
-        const SizedBox(height: 16),
-        
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('City/Area *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _cityAreaController,
-                    decoration: InputDecoration(
-                      hintText: 'e.g., Ikeja',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                    ),
-                  ),
-                ],
+          // Property Title
+          TextFormField(
+            controller: _titleController,
+            decoration: InputDecoration(
+              labelText: 'Property Title *',
+              hintText: 'e.g., Luxury 3-Bedroom Apartment in Ikoyi',
+              prefixIcon: const Icon(Icons.title_rounded),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('State *', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _stateController,
-                    decoration: InputDecoration(
-                      hintText: 'e.g., Lagos',
-                      hintStyle: TextStyle(color: Colors.grey.shade400),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                    ),
-                  ),
-                ],
+            textCapitalization: TextCapitalization.words,
+            maxLength: 100,
+          ),
+          const SizedBox(height: 16),
+
+          // Description
+          TextFormField(
+            controller: _descriptionController,
+            decoration: InputDecoration(
+              labelText: 'Description *',
+              hintText: 'Describe the property features, location, and highlights',
+              prefixIcon: const Icon(Icons.description_outlined),
+              alignLabelWithHint: true,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
             ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        
-        const Text(
-          'Room Configuration',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _buildNumberField('Bedrooms', _bedroomsController, Icons.bed_rounded),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildNumberField('Bathrooms', _bathroomsController, Icons.bathtub_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: _buildNumberField('Toilets', _toiletsController, Icons.wc_rounded),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildNumberField('Parking', _parkingSpacesController, Icons.local_parking_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: 20),
-        
-        Row(
-          children: [
-            Expanded(
-              child: _buildNumberField('Size (m²)', _squareMetersController, Icons.square_foot_rounded, isDecimal: true),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _buildNumberField('Year Built', _yearBuiltController, Icons.calendar_today_rounded),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        
-        const Text('Furnishing Status', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        DropdownButtonFormField<String>(
-          initialValue: _furnishingStatus,
-          decoration: InputDecoration(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            maxLines: 5,
+            maxLength: 1000,
+            textCapitalization: TextCapitalization.sentences,
           ),
-          items: const [
-            DropdownMenuItem(value: 'unfurnished', child: Text('Unfurnished')),
-            DropdownMenuItem(value: 'semi-furnished', child: Text('Semi-Furnished')),
-            DropdownMenuItem(value: 'fully-furnished', child: Text('Fully Furnished')),
-          ],
-          onChanged: (value) => setState(() => _furnishingStatus = value!),
-        ),
-      ],
-    );
-  }
+          const SizedBox(height: 24),
 
-  Widget _buildNumberField(String label, TextEditingController controller, IconData icon, {bool isDecimal = false}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 8),
-        TextFormField(
-          controller: controller,
-          keyboardType: TextInputType.numberWithOptions(decimal: isDecimal),
-          inputFormatters: [
-            if (!isDecimal) FilteringTextInputFormatter.digitsOnly,
-            if (isDecimal) FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-          ],
-          decoration: InputDecoration(
-            hintText: '0',
-            hintStyle: TextStyle(color: Colors.grey.shade400),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(10),
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMediaStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Property Media',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 20),
-        
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Property Images *', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            Text(
-              '${_selectedImages.length}/10',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 10,
-            mainAxisSpacing: 10,
-          ),
-          itemCount: _selectedImages.length + 1,
-          itemBuilder: (context, index) {
-            if (index == _selectedImages.length) {
-              return InkWell(
-                onTap: _selectedImages.length < 10 ? _pickImages : null,
-                borderRadius: BorderRadius.circular(10),
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _selectedImages.length < 10 ? AppColors.primaryColor : Colors.grey.shade300,
-                      width: 2,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                    color: _selectedImages.length < 10 
-                        ? AppColors.primaryColor.withValues(alpha: 0.05) 
-                        : Colors.grey.shade100,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_photo_alternate_rounded,
-                        size: 32,
-                        color: _selectedImages.length < 10 ? AppColors.primaryColor : Colors.grey,
+          // Property Type & Listing Type
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Property Type *',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Add',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: _selectedImages.length < 10 ? AppColors.primaryColor : Colors.grey,
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _propertyType,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
                       ),
-                    ],
-                  ),
-                ),
-              );
-            }
-            
-            return Stack(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(10),
-                  child: Image.file(
-                    File(_selectedImages[index].path),
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
-                ),
-                Positioned(
-                  top: 4,
-                  right: 4,
-                  child: InkWell(
-                    onTap: () => _removeImage(index),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.close_rounded, color: Colors.white, size: 14),
+                      items: const [
+                        DropdownMenuItem(value: 'apartment', child: Text('Apartment')),
+                        DropdownMenuItem(value: 'house', child: Text('House')),
+                        DropdownMenuItem(value: 'condo', child: Text('Condo')),
+                        DropdownMenuItem(value: 'land', child: Text('Land')),
+                        DropdownMenuItem(value: 'commercial', child: Text('Commercial')),
+                        DropdownMenuItem(value: 'office', child: Text('Office')),
+                        DropdownMenuItem(value: 'warehouse', child: Text('Warehouse')),
+                      ],
+                      onChanged: (value) => setState(() => _propertyType = value!),
                     ),
-                  ),
+                  ],
                 ),
-                if (index == 0)
-                  Positioned(
-                    bottom: 4,
-                    left: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryColor,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'Cover',
-                        style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      
-        const SizedBox(height: 20),
-        
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text('Property Video (Optional)', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
-            if (_selectedVideo != null)
-              TextButton(
-                onPressed: _removeVideo,
-                child: const Text('Remove', style: TextStyle(color: Colors.red)),
               ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Listing Type *',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: _listingType,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'rent', child: Text('For Rent')),
+                        DropdownMenuItem(value: 'sale', child: Text('For Sale')),
+                        DropdownMenuItem(value: 'lease', child: Text('For Lease')),
+                        DropdownMenuItem(value: 'shortlet', child: Text('Shortlet')),
+                      ],
+                      onChanged: (value) => setState(() => _listingType = value!),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Price
+          Text(
+            'Price *',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextFormField(
+            controller: _priceController,
+            decoration: InputDecoration(
+              labelText: 'Price (NGN)',
+              hintText: '0',
+              prefixIcon: const Icon(Icons.currency_exchange_rounded),
+              prefixText: '₦ ',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          ),
+          const SizedBox(height: 12),
+          
+          CheckboxListTile(
+            value: _negotiable,
+            onChanged: (value) => setState(() => _negotiable = value ?? false),
+            title: const Text('Price is negotiable'),
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            dense: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // PAGE 2: PROPERTY DETAILS
+  Widget _buildPropertyDetailsPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Property Details',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Add specific details about the property',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Location Section
+          Text(
+            'Location *',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          TextFormField(
+            controller: _addressController,
+            decoration: InputDecoration(
+              labelText: 'Street Address',
+              hintText: 'e.g., 123 Main Street',
+              prefixIcon: const Icon(Icons.location_on_outlined),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
+            textCapitalization: TextCapitalization.words,
+          ),
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              Expanded(
+                child: TextFormField(
+                  controller: _cityAreaController,
+                  decoration: InputDecoration(
+                    labelText: 'City/Area',
+                    hintText: 'e.g., Ikoyi',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  controller: _stateController,
+                  decoration: InputDecoration(
+                    labelText: 'State',
+                    hintText: 'e.g., Lagos',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    filled: true,
+                    fillColor: Colors.grey.shade50,
+                  ),
+                  textCapitalization: TextCapitalization.words,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Property Features
+          Text(
+            'Property Features',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildNumberField(
+                  controller: _bedroomsController,
+                  label: 'Bedrooms',
+                  icon: Icons.bed_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildNumberField(
+                  controller: _bathroomsController,
+                  label: 'Bathrooms',
+                  icon: Icons.bathtub_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              Expanded(
+                child: _buildNumberField(
+                  controller: _toiletsController,
+                  label: 'Toilets',
+                  icon: Icons.wc_outlined,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildNumberField(
+                  controller: _parkingSpacesController,
+                  label: 'Parking',
+                  icon: Icons.local_parking_outlined,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Additional Details
+          Text(
+            'Additional Details',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey.shade800,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          TextFormField(
+            controller: _squareMetersController,
+            decoration: InputDecoration(
+              labelText: 'Size (Square Meters)',
+              hintText: 'e.g., 120',
+              prefixIcon: const Icon(Icons.square_foot_outlined),
+              suffixText: 'm²',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          TextFormField(
+            controller: _yearBuiltController,
+            decoration: InputDecoration(
+              labelText: 'Year Built',
+              hintText: 'e.g., 2020',
+              prefixIcon: const Icon(Icons.calendar_today_outlined),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+            ),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(4),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          Text(
+            'Furnishing Status',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey.shade700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: _furnishingStatus,
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              filled: true,
+              fillColor: Colors.grey.shade50,
+              prefixIcon: const Icon(Icons.weekend_outlined),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'unfurnished', child: Text('Unfurnished')),
+              DropdownMenuItem(value: 'semi-furnished', child: Text('Semi-Furnished')),
+              DropdownMenuItem(value: 'fully-furnished', child: Text('Fully Furnished')),
+            ],
+            onChanged: (value) => setState(() => _furnishingStatus = value!),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNumberField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+  }) {
+    return TextFormField(
+      controller: controller,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
-        const SizedBox(height: 12),
-        
-        if (_selectedVideo == null)
+        filled: true,
+        fillColor: Colors.grey.shade50,
+      ),
+      keyboardType: TextInputType.number,
+      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+    );
+  }
+
+  // PAGE 3: PHOTOS & VIDEO
+  Widget _buildPhotosVideoPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Photos & Video',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Add high-quality photos and optional video tour',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Property Images
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Property Images *',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                '${_selectedImages.length}/10',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey.shade600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Add Images Button
           InkWell(
-            onTap: _pickVideo,
-            borderRadius: BorderRadius.circular(10),
+            onTap: _selectedImages.length < 10 ? _pickImages : null,
+            borderRadius: BorderRadius.circular(16),
             child: Container(
-              height: 100,
+              height: 120,
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300, width: 2),
-                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.primaryColor,
+                  width: 2,
+                  style: BorderStyle.solid,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                color: AppColors.primaryColor.withValues(alpha: 0.05),
               ),
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.videocam_rounded, size: 36, color: Colors.grey.shade400),
+                    Icon(
+                      Icons.add_photo_alternate_outlined,
+                      size: 48,
+                      color: AppColors.primaryColor,
+                    ),
                     const SizedBox(height: 8),
-                    Text('Add Video', style: TextStyle(color: Colors.grey.shade600)),
+                    Text(
+                      _selectedImages.isEmpty
+                          ? 'Add Photos'
+                          : 'Add More Photos',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryColor,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Maximum 10 images',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
-          )
-        else
-          Container(
-            height: 90,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: AppColors.primaryColor),
+          ),
+
+          if (_selectedImages.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+              ),
+              itemCount: _selectedImages.length,
+              itemBuilder: (context, index) {
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        File(_selectedImages[index].path),
+                        width: double.infinity,
+                        height: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: InkWell(
+                        onTap: () => _removeImage(index),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.close_rounded,
+                            color: Colors.white,
+                            size: 16,
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (index == 0)
+                      Positioned(
+                        bottom: 4,
+                        left: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryColor,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text(
+                            'COVER',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
-            child: Row(
-              children: [
-                Container(
-                  width: 70,
-                  height: 70,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryColor.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
+          ],
+
+          const SizedBox(height: 32),
+
+          // Property Video
+          const Text(
+            'Property Video (Optional)',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          if (_selectedVideo == null)
+            InkWell(
+              onTap: _pickVideo,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                height: 100,
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: Colors.grey.shade300,
+                    width: 2,
                   ),
-                  child: const Icon(Icons.play_circle_filled_rounded, size: 36, color: AppColors.primaryColor),
+                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.grey.shade50,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
+                child: Center(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Text(
-                        'Video Added',
-                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                      Icon(
+                        Icons.videocam_outlined,
+                        size: 40,
+                        color: Colors.grey.shade400,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
                       Text(
-                        _selectedVideo!.name,
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+                        'Add Video Tour',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                      Text(
+                        'Max 2 minutes, 100MB',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ],
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.green),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 60,
+                    height: 60,
+                    decoration: BoxDecoration(
+                      color: Colors.green.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.play_circle_filled_rounded,
+                      size: 36,
+                      color: Colors.green,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Video Added',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          _selectedVideo!.name,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _removeVideo,
+                    icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                  ),
+                ],
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildReviewStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Review Your Property',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 20),
-        
-        if (_isUploadingMedia)
-          Container(
-            padding: const EdgeInsets.all(16),
-            margin: const EdgeInsets.only(bottom: 20),
-            decoration: BoxDecoration(
-              color: AppColors.primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
+  // PAGE 4: AMENITIES
+  Widget _buildAmenitiesPage() {
+    if (_isLoadingAmenities) {
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    // Group amenities by category
+    final Map<String, List<Amenity>> groupedAmenities = {};
+    for (var amenity in _availableAmenities) {
+      final category = amenity.category ?? 'Other';
+      if (!groupedAmenities.containsKey(category)) {
+        groupedAmenities[category] = [];
+      }
+      groupedAmenities[category]!.add(amenity);
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Amenities',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
-            child: const Row(
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Select the amenities available at this property',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Display amenities by category
+          ...groupedAmenities.entries.map((entry) {
+            final category = entry.key;
+            final amenities = entry.value;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Text('Uploading media files...\nThis may take a few moments.'),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    category,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey.shade800,
+                    ),
+                  ),
                 ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: amenities.map((amenity) {
+                    final isSelected = _selectedAmenityIds.contains(amenity.id);
+                    return FilterChip(
+                      label: Text(amenity.name),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          if (selected) {
+                            _selectedAmenityIds.add(amenity.id);
+                          } else {
+                            _selectedAmenityIds.remove(amenity.id);
+                          }
+                        });
+                      },
+                      selectedColor: AppColors.primaryColor.withValues(alpha: 0.2),
+                      checkmarkColor: AppColors.primaryColor,
+                      backgroundColor: Colors.grey.shade100,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        side: BorderSide(
+                          color: isSelected
+                              ? AppColors.primaryColor
+                              : Colors.grey.shade300,
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 24),
               ],
+            );
+          }).toList(),
+
+          if (_selectedAmenityIds.isNotEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primaryColor.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    color: AppColors.primaryColor,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    '${_selectedAmenityIds.length} amenities selected',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.primaryColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // PAGE 5: REVIEW
+  Widget _buildReviewPage() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Review & Submit',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
           ),
-        
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade50,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: Colors.grey.shade200),
+          const SizedBox(height: 8),
+          Text(
+            'Review all details before submitting your property',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey.shade600,
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildReviewItem('Title', _titleController.text),
-              _buildReviewItem('Description', _descriptionController.text),
-              _buildReviewItem('Property Type', _propertyType.toUpperCase()),
-              _buildReviewItem('Listing Type', _listingType.toUpperCase()),
-              _buildReviewItem('Price', '₦${_priceController.text}${_negotiable ? ' (Negotiable)' : ''}'),
-              
-              if (_bedroomsController.text.isNotEmpty || _bathroomsController.text.isNotEmpty)
-                _buildReviewItem(
-                  'Rooms',
-                  '${_bedroomsController.text.isEmpty ? '0' : _bedroomsController.text} Bed • '
-                  '${_bathroomsController.text.isEmpty ? '0' : _bathroomsController.text} Bath'
-                ),
-              
-              if (_squareMetersController.text.isNotEmpty)
-                _buildReviewItem('Size', '${_squareMetersController.text} m²'),
-              
-              _buildReviewItem('Furnishing', _furnishingStatus.toUpperCase()),
-              _buildReviewItem('Address', _addressController.text),
-              _buildReviewItem('Location', '${_cityAreaController.text}, ${_stateController.text}'),
-              
-              const Divider(height: 20),
-              
-              _buildReviewItem('Images', '${_selectedImages.length} image(s)'),
-              if (_selectedVideo != null)
-                _buildReviewItem('Video', '1 video added'),
-            ],
+          const SizedBox(height: 24),
+
+          if (_isUploadingMedia)
+            Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: AppColors.primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Row(
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Uploading media files...',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'This may take a few moments',
+                          style: TextStyle(fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+          _buildReviewSection('Basic Information', [
+            _buildReviewItem('Title', _titleController.text),
+            _buildReviewItem('Description', _descriptionController.text),
+            _buildReviewItem('Property Type', _propertyType.toUpperCase()),
+            _buildReviewItem('Listing Type', _listingType.toUpperCase()),
+            _buildReviewItem(
+              'Price',
+              '₦${_priceController.text}${_negotiable ? ' (Negotiable)' : ''}',
+            ),
+          ]),
+          const SizedBox(height: 16),
+
+          _buildReviewSection('Property Details', [
+            _buildReviewItem('Address', _addressController.text),
+            _buildReviewItem(
+              'Location',
+              '${_cityAreaController.text}, ${_stateController.text}',
+            ),
+            _buildReviewItem(
+              'Rooms',
+              '${_bedroomsController.text} Bed • ${_bathroomsController.text} Bath • ${_toiletsController.text} Toilet',
+            ),
+            if (_squareMetersController.text.isNotEmpty)
+              _buildReviewItem('Size', '${_squareMetersController.text} m²'),
+            if (_yearBuiltController.text.isNotEmpty)
+              _buildReviewItem('Year Built', _yearBuiltController.text),
+            _buildReviewItem('Furnishing', _furnishingStatus.toUpperCase()),
+            _buildReviewItem('Parking Spaces', _parkingSpacesController.text),
+          ]),
+          const SizedBox(height: 16),
+
+          _buildReviewSection('Media', [
+            _buildReviewItem('Photos', '${_selectedImages.length} image(s)'),
+            if (_selectedVideo != null)
+              _buildReviewItem('Video', '1 video added'),
+          ]),
+          const SizedBox(height: 16),
+
+          if (_selectedAmenityIds.isNotEmpty)
+            _buildReviewSection('Amenities', [
+              _buildReviewItem(
+                'Selected',
+                '${_selectedAmenityIds.length} amenities',
+              ),
+            ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReviewSection(String title, List<Widget> children) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryColor,
+            ),
           ),
-        ),
-      ],
+          const Divider(height: 20),
+          ...children,
+        ],
+      ),
     );
   }
 
   Widget _buildReviewItem(String label, String value) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 90,
+            width: 100,
             child: Text(
               label,
-              style: TextStyle(fontWeight: FontWeight.w600, color: Colors.grey.shade700, fontSize: 13),
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.grey.shade700,
+                fontSize: 13,
+              ),
             ),
           ),
           Expanded(

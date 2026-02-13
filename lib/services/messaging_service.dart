@@ -47,6 +47,7 @@ Future<Conversation> getOrCreateConversation({
     final newConversation = await _client.from('conversations').insert({
       'initiator_id': currentUserId,
       'receiver_id': otherUserId,
+      'property_id': propertyId,
       if (propertyId != null) 'property_id': propertyId,
       'created_at': DateTime.now().toIso8601String(),
       'updated_at': DateTime.now().toIso8601String(),
@@ -124,6 +125,7 @@ Future<Conversation> getOrCreateConversation({
     required String conversationId,
     required String receiverId,
     required String content,
+    String? propertyId,
     String? attachmentUrl,
     String messageType = 'text',
   }) async {
@@ -139,6 +141,7 @@ Future<Conversation> getOrCreateConversation({
         'sender_id': currentUserId,
         'receiver_id': receiverId,
         'content': content,
+        'property_id': propertyId,
         'attachment_url': attachmentUrl,
         'message_type': messageType,
         'is_read': false,

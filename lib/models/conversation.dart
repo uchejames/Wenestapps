@@ -41,7 +41,7 @@ class Conversation {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'property_id': propertyId,
+      'property_id': propertyId != null ? int.tryParse(propertyId!) : null,
       'initiator_id': initiatorId,
       'receiver_id': receiverId,
       'last_message': lastMessage,

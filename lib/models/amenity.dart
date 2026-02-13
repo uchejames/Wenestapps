@@ -1,5 +1,5 @@
 class Amenity {
-  final String id;
+  final int id; // Changed from String to int to match database bigserial
   final String name;
   final String? icon;
   final String? category;
@@ -19,7 +19,7 @@ class Amenity {
 
   factory Amenity.fromJson(Map<String, dynamic> json) {
     return Amenity(
-      id: json['id'] as String,
+      id: json['id'] as int, // Parse as int
       name: json['name'] as String,
       icon: json['icon'] as String?,
       category: json['category'] as String?,

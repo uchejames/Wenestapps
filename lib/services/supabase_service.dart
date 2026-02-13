@@ -6,6 +6,7 @@ import 'package:wenest/models/agent.dart';
 import 'package:wenest/models/landlord.dart';
 import 'package:wenest/models/property.dart';
 import 'package:wenest/models/property_media.dart';
+import 'package:wenest/models/amenity.dart';
 import 'dart:io';
 
 class SupabaseService {
@@ -962,6 +963,163 @@ class SupabaseService {
       }).eq('id', agentId);
     } catch (e) {
       debugPrint('Error removing agent: $e');
+      rethrow;
+    }
+  }
+
+  // ============ AMENITIES METHODS ============
+// Add these methods to your SupabaseService class
+
+// Get all amenities
+Future<List<Amenity>> getAllAmenities() async {
+  try {
+    debugPrint('DEBUG: Fetching amenities from database...');
+    
+    final response = await client
+        .from('amenities')
+        .select()
+        .order('category', ascending: true)
+        .order('name', ascending: true);
+    
+    debugPrint('DEBUG: Raw response type: ${response.runtimeType}');
+    debugPrint('DEBUG: Raw response: $response');
+    
+    if (response is List) {
+      debugPrint('DEBUG: Response is a List with ${response.length} items');
+      
+      final amenities = response
+          .map((data) {
+            try {
+              debugPrint('DEBUG: Parsing amenity data: $data');
+              return Amenity.fromJson(data);
+            } catch (e) {
+              debugPrint('DEBUG ERROR: Failed to parse amenity: $e');
+              debugPrint('DEBUG ERROR DATA: $data');
+              rethrow;
+            }
+          })
+          .toList();
+      
+      debugPrint('DEBUG: Successfully parsed ${amenities.length} amenities');
+      return amenities;
+    } else {
+      debugPrint('DEBUG ERROR: Response is not a List!');
+      return [];
+    }
+  } catch (e) {
+    debugPrint('DEBUG ERROR in getAllAmenities: $e');
+    return [];
+  }
+}
+
+// Get amenities by category
+Future<List<Amenity>> getAmenitiesByCategory(String category) async {
+  try {
+    final response = await client
+        .from('amenities')
+        .select()
+        .eq('category', category)
+        // Removed .eq('is_active', true) - column doesn't exist in schema
+        .order('name', ascending: true);
+    
+    return (response as List)
+        .map((data) => Amenity.fromJson(data))
+        .toList();
+  } catch (e) {
+    debugPrint('Error getting amenities by category: $e');
+    return [];
+  }
+}
+
+// Add amenity to property
+Future<void> addPropertyAmenity({
+  required String propertyId,
+  required String amenityId, // Accepts String to be flexible
+}) async {
+  try {
+    // Parse to int since database uses bigint
+    final propertyIdInt = int.parse(propertyId);
+    final amenityIdInt = int.parse(amenityId);
+    
+    await client.from('property_amenities').insert({
+      'property_id': propertyIdInt,
+      'amenity_id': amenityIdInt,
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  } catch (e) {
+    debugPrint('Error adding property amenity: $e');
+    rethrow;
+  }
+}
+
+// Remove amenity from property
+Future<void> removePropertyAmenity({
+  required String propertyId,
+  required String amenityId,
+}) async {
+  try {
+    // Parse to int since database uses bigint
+    final propertyIdInt = int.parse(propertyId);
+    final amenityIdInt = int.parse(amenityId);
+    
+    await client
+        .from('property_amenities')
+        .delete()
+        .eq('property_id', propertyIdInt)
+        .eq('amenity_id', amenityIdInt);
+  } catch (e) {
+    debugPrint('Error removing property amenity: $e');
+    rethrow;
+  }
+}
+
+  // Get amenities for a property
+  Future<List<Amenity>> getPropertyAmenities(String propertyId) async {
+    try {
+      // Parse to int since database uses bigint
+      final propertyIdInt = int.parse(propertyId);
+      
+      final response = await client
+          .from('property_amenities')
+          .select('amenity_id, amenities(*)')
+          .eq('property_id', propertyIdInt);
+      
+      return (response as List)
+          .map((data) => Amenity.fromJson(data['amenities']))
+          .toList();
+    } catch (e) {
+      debugPrint('Error getting property amenities: $e');
+      return [];
+    }
+  }
+
+  // Update property amenities (bulk update)
+  Future<void> updatePropertyAmenities({
+    required String propertyId,
+    required List<String> amenityIds,
+  }) async {
+    try {
+      // Parse to int since database uses bigint
+      final propertyIdInt = int.parse(propertyId);
+      
+      // First, remove all existing amenities
+      await client
+          .from('property_amenities')
+          .delete()
+          .eq('property_id', propertyIdInt);
+      
+      // Then, add the new ones
+      if (amenityIds.isNotEmpty) {
+        final inserts = amenityIds.map((amenityId) => {
+          'property_id': propertyIdInt,
+          'amenity_id': int.parse(amenityId),
+          'created_at': DateTime.now().toIso8601String(),
+        }).toList();
+        
+        await client.from('property_amenities').insert(inserts);
+      }
+    } catch (e) {
+      debugPrint('Error updating property amenities: $e');
       rethrow;
     }
   }

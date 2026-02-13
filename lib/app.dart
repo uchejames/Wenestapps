@@ -52,6 +52,7 @@ import 'screens/shared/notifications_settings_screen.dart';
 
 // Import models for chat routing
 import 'models/profile.dart';
+import 'models/property.dart';
 
 
 class MyApp extends StatelessWidget {
@@ -186,6 +187,7 @@ class MyApp extends StatelessWidget {
             builder: (context) => ChatScreen(
               conversationId: args['conversationId'] as String,
               otherUser: args['otherUser'] as Profile,
+              propertyContext: args['propertyContext'] as Property?,
             ),
           );
         }
